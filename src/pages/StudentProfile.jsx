@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import DACLayout from '../components/layout/DACLayout';
 import { Avatar, Card, EmptyState, Icon, SeverityPill, StatusText } from '../components/cases/parts';
 import { caseLink, fmtNumber, formatDate, statusLabel, toTitleCase } from '../components/cases/caseUi';
@@ -44,6 +44,7 @@ function StatTile({ icon, label, value }) {
  */
 export default function StudentProfile() {
   const { enrollmentNo } = useParams();
+  const location = useLocation();
   const { role } = useAuth();
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -88,13 +89,24 @@ export default function StudentProfile() {
 
         {!loading && student && (
           <>
-            <Card>
-              <div className="px-6 pb-6 flex flex-wrap items-center gap-5">
-                <Avatar name={student.name} seed={Number(student.enrollment_no) || 0} square size="h-16 w-16" />
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Student Profile</p>
-                  <h1 className="text-2xl font-semibold text-slate-900 tracking-tight">{student.name}</h1>
-                  <p className="text-sm text-slate-500 font-mono mt-1">Enrollment {student.enrollment_no}</p>
+            <Card className="overflow-hidden">
+              <div className="p-6 sm:p-8 flex flex-col items-center gap-5 text-center sm:flex-row sm:items-center sm:gap-6 sm:text-left">
+                <Avatar
+                  name={student.name}
+                  seed={Number(student.enrollment_no) || 0}
+                  square
+                  size="h-20 w-20 sm:h-24 sm:w-24"
+                  textClass="text-2xl"
+                />
+                <div className="min-w-0 space-y-2.5">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#3d3793]">Student Profile</p>
+                  <h1 className="text-2xl sm:text-3xl font-semibold leading-tight text-slate-900 tracking-tight break-words">
+                    {student.name}
+                  </h1>
+                  <p className="inline-flex items-center gap-2 rounded-full bg-[#f0eefc] px-3 py-1 text-xs font-medium text-[#3d3793]">
+                    <Icon name="badge" className="text-[15px]" />
+                    Enrollment <span className="font-mono font-semibold">{student.enrollment_no}</span>
+                  </p>
                 </div>
               </div>
             </Card>
@@ -154,6 +166,7 @@ export default function StudentProfile() {
 
                       <Link
                         to={caseLink(role, c.id)}
+                        state={{ from: location.pathname }}
                         className="justify-self-start md:justify-self-end inline-flex items-center gap-1 h-9 px-4 rounded-lg bg-[#3d3793] hover:bg-[#332e7d] text-white text-sm font-medium"
                       >
                         View Case

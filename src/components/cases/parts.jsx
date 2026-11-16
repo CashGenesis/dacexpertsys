@@ -8,11 +8,11 @@ export function Icon({ name, className = '' }) {
   );
 }
 
-export function Avatar({ name = '', seed = 0, square = false, size = 'h-9 w-9' }) {
+export function Avatar({ name = '', seed = 0, square = false, size = 'h-9 w-9', textClass = 'text-xs' }) {
   const initials = name.split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase();
   return (
     <span
-      className={`${size} shrink-0 flex items-center justify-center text-xs font-semibold ${
+      className={`${size} shrink-0 flex items-center justify-center ${textClass} font-semibold ${
         square ? 'rounded-lg' : 'rounded-md'
       } ${AVATAR_TINTS[Math.abs(seed) % AVATAR_TINTS.length]}`}
     >

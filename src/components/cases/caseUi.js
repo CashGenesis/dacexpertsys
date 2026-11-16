@@ -38,6 +38,16 @@ export const STAGE_FOR_ROLE = {
   admin: 'pending_admin',
 };
 
+// Staff-only student profile route. Enrollment number is the identifier (unique in users).
+export function studentProfilePath(enrollmentNo) {
+  return `/students/${encodeURIComponent(enrollmentNo)}`;
+}
+
+// A return target is accepted only if it is an in-app student profile path.
+export function safeReturnPath(value) {
+  return typeof value === 'string' && /^\/students\/[^/?#]+$/.test(value) ? value : null;
+}
+
 const CASE_ROUTES = {
   warden: '/warden/cases',
   chief_warden: '/chief-warden/cases',

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { askChatbot } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { OPEN_ASSISTANT_EVENT } from '../lib/assistant';
+import StudentProfileLink from './cases/StudentProfileLink';
 
 const DEFAULT_SUGGESTIONS = [
   'What are the DAC points for weed?',
@@ -46,7 +47,8 @@ function CaseCard({ item, role, navigate }) {
         <p><span className="text-[#94a3b8] font-medium">Date:</span> {dateStr}</p>
       </div>
 
-      <div className="mt-2.5 pt-2 border-t border-[#edf2f7] flex justify-end">
+      <div className="mt-2.5 pt-2 border-t border-[#edf2f7] flex items-center justify-between gap-2">
+        <StudentProfileLink enrollment={item.enrollment_no} />
         <button
           type="button"
           onClick={() => navigate(casePath(role, item.id))}
@@ -74,6 +76,7 @@ function SourceCitations({ sources, role, navigate }) {
             <span className="truncate pr-2 text-xs">
               • {src.title || src.id} {src.section ? `(${src.section})` : ''}
             </span>
+            {src.student_enrollment && <StudentProfileLink enrollment={src.student_enrollment} className="shrink-0 mr-2" />}
             {src.db_id != null && (
               <button
                 type="button"

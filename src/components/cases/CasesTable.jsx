@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { caseLink, formatDate, fmtNumber, pageList } from './caseUi';
 import { Avatar, Card, EmptyState, Icon, SeverityPill, StatusText } from './parts';
+import StudentProfileLink from './StudentProfileLink';
 
 /**
  * Paginated case table with optional filter tabs. Remount it (change `key`)
@@ -93,6 +94,7 @@ export default function CasesTable({
                         <div>
                           <p className="font-medium text-slate-900 whitespace-nowrap">{c.student}</p>
                           <p className="text-xs text-slate-500">{c.enrollment}</p>
+                          <StudentProfileLink enrollment={c.enrollment} className="mt-0.5" />
                         </div>
                       </div>
                     </td>

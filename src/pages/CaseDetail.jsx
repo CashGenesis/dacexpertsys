@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import DACLayout from '../components/layout/DACLayout';
 import { Avatar, Button, Card, EmptyState, Icon, SeverityPill, StatusText } from '../components/cases/parts';
-import { formatDate, formatDateTime, fmtNumber, toTitleCase } from '../components/cases/caseUi';
+import StudentProfileLink from '../components/cases/StudentProfileLink';
+import { formatDate, formatDateTime, fmtNumber, safeReturnPath, toTitleCase } from '../components/cases/caseUi';
 import { useAuth } from '../context/AuthContext';
 import { approveCase, getCaseById, getCaseTimeline, updateCase } from '../services/api';
 
@@ -116,6 +117,9 @@ function AdminDecision({ caseItem, busy, onSubmit }) {
  */
 export default function CaseDetail() {
   const params = useParams();
+  const location = useLocation();
+  // Set by the student profile when it opens a case, so Back returns to that profile.
+  const returnTo = safeReturnPath(location.state?.from);
   const caseId = params.id || params.token;
   const { role } = useAuth();
   const [caseItem, setCaseItem] = useState(null);
@@ -156,7 +160,9 @@ export default function CaseDetail() {
     }
   };
 
-  const back = LIST_LINKS[role] || LIST_LINKS.admin;
+  const back = returnTo
+    ? { to: returnTo, label: 'Back to Student Profile' }
+    : LIST_LINKS[role] || LIST_LINKS.admin;
   const status = String(caseItem?.status || '').toLowerCase();
   const assigned = String(caseItem?.assigned_to_role || '').toLowerCase();
   const canAct = Boolean(caseItem) && status !== 'resolved' && assigned === role;
@@ -288,6 +294,7 @@ export default function CaseDetail() {
                       <div>
                         <p className="text-sm font-semibold text-slate-900">{caseItem.student_name}</p>
                         <p className="text-xs text-slate-500">{caseItem.enrollment_no}</p>
+                        <StudentProfileLink enrollment={caseItem.enrollment_no} className="mt-1" />
                       </div>
                     </div>
                     <dl className="mt-5 grid grid-cols-2 gap-x-4 gap-y-4">

@@ -241,7 +241,7 @@ export default function DACLayout({ children, searchValue, onSearchChange, searc
                 onChange={onSearchChange}
                 results={searchResults}
                 onSubmit={handleSearchSubmit}
-                placeholder="Search by case ID, student, or offence..."
+                placeholder={role === 'student' ? 'Search your cases...' : 'Search by case ID, student, or offence...'}
                 shortcut="Ctrl K"
                 inputClassName="py-2.5 bg-white border border-slate-200 rounded-lg text-sm text-slate-800 placeholder:text-slate-400 focus:border-[#3d3793] focus:ring-4 focus:ring-indigo-100"
               />

@@ -16,6 +16,7 @@ import {
   searchCases,
   searchStudents,
   statusLabel,
+  studentProfilePath,
 } from '../components/cases/caseUi';
 import { useAuth } from '../context/AuthContext';
 import { getCases } from '../services/api';
@@ -96,7 +97,7 @@ export default function Dashboard() {
       meta: 'View Profile →',
       metaClassName: 'font-semibold text-[#3d3793]',
       leading: <Avatar name={c.student} seed={Number(c.enrollment) || 0} size="h-8 w-8" />,
-      to: `/students/${encodeURIComponent(c.enrollment)}`,
+      to: studentProfilePath(c.enrollment),
     }));
     const caseResults = searchCases(cases, search)
       .slice(0, 8)
