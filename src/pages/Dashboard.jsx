@@ -14,6 +14,7 @@ import {
   mapCase,
   matchesFilter,
   searchCases,
+  searchStudents,
   statusLabel,
 } from '../components/cases/caseUi';
 import { useAuth } from '../context/AuthContext';
@@ -86,21 +87,28 @@ export default function Dashboard() {
   const trend = useMemo(() => buildTrend(cases, TREND_RANGES.find((r) => r.key === trendRange)), [cases, trendRange]);
   const trendTotal = trend.reduce((sum, p) => sum + p.value, 0);
 
-  const searchResults = useMemo(
-    () =>
-      search.trim()
-        ? searchCases(cases, search)
-            .slice(0, 8)
-            .map((c) => ({
-              key: c.id,
-              title: `${c.caseId} · ${c.student}`,
-              subtitle: [c.enrollment, c.offense].filter(Boolean).join(' · '),
-              meta: statusLabel(c.status),
-              to: caseLink(role, c.id),
-            }))
-        : [],
-    [cases, search, role]
-  );
+  const searchResults = useMemo(() => {
+    if (!search.trim()) return [];
+    const studentResults = searchStudents(cases, search).map((c) => ({
+      key: `student-${c.enrollment}`,
+      title: c.student,
+      subtitle: `Enrollment ${c.enrollment}`,
+      meta: 'View Profile →',
+      metaClassName: 'font-semibold text-[#3d3793]',
+      leading: <Avatar name={c.student} seed={Number(c.enrollment) || 0} size="h-8 w-8" />,
+      to: `/students/${encodeURIComponent(c.enrollment)}`,
+    }));
+    const caseResults = searchCases(cases, search)
+      .slice(0, 8)
+      .map((c) => ({
+        key: c.id,
+        title: `${c.caseId} · ${c.student}`,
+        subtitle: [c.enrollment, c.offense].filter(Boolean).join(' · '),
+        meta: statusLabel(c.status),
+        to: caseLink(role, c.id),
+      }));
+    return [...studentResults, ...caseResults];
+  }, [cases, search, role]);
 
   const statCards = [
     {

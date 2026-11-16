@@ -122,11 +122,14 @@ export default function SearchBox({
                     onClick={() => openResult(result)}
                     className={`w-full text-left px-4 py-2.5 flex items-center justify-between gap-3 ${idx === highlight ? 'bg-slate-50' : ''}`}
                   >
-                    <span className="min-w-0">
-                      <span className="block text-xs font-semibold text-slate-900 truncate">{result.title}</span>
-                      <span className="block text-[11px] text-slate-500 truncate">{result.subtitle}</span>
+                    <span className="flex items-center gap-3 min-w-0">
+                      {result.leading}
+                      <span className="min-w-0">
+                        <span className="block text-xs font-semibold text-slate-900 truncate">{result.title}</span>
+                        <span className="block text-[11px] text-slate-500 truncate">{result.subtitle}</span>
+                      </span>
                     </span>
-                    {result.meta && <span className="shrink-0 text-[11px] text-slate-500">{result.meta}</span>}
+                    {result.meta && <span className={`shrink-0 text-[11px] ${result.metaClassName || 'text-slate-500'}`}>{result.meta}</span>}
                   </button>
                 </li>
               ))}

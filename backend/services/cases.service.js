@@ -323,6 +323,38 @@ export async function getCaseByIdService(caseId) {
   return result.rows[0] || null;
 }
 
+const ACTIVE_CASE_STATUSES = ['pending_chief', 'pending_dsw', 'pending_admin'];
+
+// One student (by enrollment number) plus all of their DAC cases. The summary is
+// computed from the same case rows that are returned, so totals match the history.
+export async function getStudentProfileService(enrollmentNo) {
+  const studentResult = await pool.query(
+    `SELECT id, name, email, enrollment_no, program, year, hostel, room, gender, student_status
+     FROM users
+     WHERE role = 'student' AND enrollment_no = $1`,
+    [enrollmentNo]
+  );
+  const student = studentResult.rows[0];
+  if (!student) return null;
+
+  const casesResult = await pool.query(
+    `${CASE_WITH_STUDENT_SELECT}
+     WHERE cases.student_id = $1
+     ORDER BY cases.incident_date DESC NULLS LAST, cases.id DESC`,
+    [student.id]
+  );
+  const cases = casesResult.rows;
+
+  const summary = {
+    total_cases: cases.length,
+    total_points: cases.reduce((sum, c) => sum + Number(c.penalty_points || 0), 0),
+    active_cases: cases.filter((c) => ACTIVE_CASE_STATUSES.includes(c.status)).length,
+    resolved_cases: cases.filter((c) => c.status === 'resolved').length,
+  };
+
+  return { student, summary, cases };
+}
+
 export async function updateCaseService(caseId, payload, actor) {
   const updates = [];
   const values = [];

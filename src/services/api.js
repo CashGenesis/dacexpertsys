@@ -98,6 +98,10 @@ export async function getCaseById(caseId) {
   return fetchJson(`/api/cases/${caseId}`);
 }
 
+export async function getStudentProfile(enrollmentNo) {
+  return fetchJson(`/api/cases/student/${encodeURIComponent(enrollmentNo)}/profile`);
+}
+
 export async function updateCase(caseId, payload) {
   return fetchJson(`/api/cases/${caseId}`, {
     method: 'PUT',

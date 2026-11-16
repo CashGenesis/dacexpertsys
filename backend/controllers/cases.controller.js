@@ -4,6 +4,7 @@ import {
   approveCaseService,
   getCaseHistoryService,
   getCaseByIdService,
+  getStudentProfileService,
   updateCaseService,
   deleteCaseService,
 } from '../services/cases.service.js';
@@ -76,6 +77,25 @@ export async function getCaseByIdController(req, res) {
   } catch (error) {
     console.error('Error fetching case:', error);
     return res.status(500).json({ error: 'Failed to fetch case' });
+  }
+}
+
+export async function getStudentProfileController(req, res) {
+  try {
+    const enrollmentNo = String(req.params.enrollmentNo || '').trim();
+    if (!enrollmentNo) {
+      return res.status(400).json({ error: 'A valid enrollment number is required' });
+    }
+
+    const profile = await getStudentProfileService(enrollmentNo);
+    if (!profile) {
+      return res.status(404).json({ error: 'Student not found' });
+    }
+
+    return res.status(200).json(profile);
+  } catch (error) {
+    console.error('Error fetching student profile:', error);
+    return res.status(500).json({ error: 'Failed to fetch student profile' });
   }
 }
 

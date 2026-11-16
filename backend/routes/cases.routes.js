@@ -11,6 +11,7 @@ import {
   deleteCaseController,
   approveCaseController,
   getCaseHistoryController,
+  getStudentProfileController,
 } from '../controllers/cases.controller.js';
 import { studentHistoryController } from '../controllers/chatbot.controller.js';
 import { uploadEvidenceController } from '../controllers/evidence.controller.js';
@@ -55,6 +56,7 @@ const upload = multer({
 router.get('/', getAllCasesController);
 router.get('/history', getCaseHistoryController);
 router.get('/student/:enrollmentNo', requireRoles('warden', 'chief_warden', 'dsw', 'admin'), studentHistoryController);
+router.get('/student/:enrollmentNo/profile', requireRoles('warden', 'chief_warden', 'dsw', 'admin'), getStudentProfileController);
 router.get('/:id/timeline', getCaseTimelineController);
 router.post('/:id/timeline', requireRoles('admin'), createCaseTimelineController);
 router.put('/:id/timeline/:timelineId', requireRoles('admin'), updateCaseTimelineController);

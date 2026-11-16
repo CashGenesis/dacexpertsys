@@ -17,6 +17,7 @@ import Profile from './pages/Profile.jsx';
 import RegisterCase from './pages/warden/RegisterCase.jsx';
 import StudentDashboard from './pages/student/StudentDashboard.jsx';
 import StudentPolicy from './pages/student/StudentPolicy.jsx';
+import StudentProfile from './pages/StudentProfile.jsx';
 import Settings from './pages/Settings.jsx';
 import DacChatbot from './components/DacChatbot.jsx';
 
@@ -57,6 +58,7 @@ function AnimatedRoutes() {
         <Route path="/reports" element={<ProtectedRoute roles={['admin', 'dsw']}><Reports /></ProtectedRoute>} />
         <Route path="/cases/:id" element={<ProtectedRoute roles={['admin', 'dsw']}><CaseDetail /></ProtectedRoute>} />
         <Route path="/view-case/:id" element={<ProtectedRoute roles={['admin', 'dsw']}><CaseDetail /></ProtectedRoute>} />
+        <Route path="/students/:enrollmentNo" element={<ProtectedRoute roles={['admin', 'dsw', 'warden', 'chief_warden']}><StudentProfile /></ProtectedRoute>} />
         <Route path="/settings" element={<ProtectedRoute roles={['student', 'warden', 'chief_warden', 'dsw', 'admin']}><Settings /></ProtectedRoute>} />
 
         {/* Student */}
