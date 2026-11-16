@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import DACLayout from '../../components/layout/DACLayout';
+import { useAuth } from '../../context/AuthContext';
 import StudentCard from '../../components/ui/StudentCard';
 import StatusBadge from '../../components/ui/StatusBadge';
 import { createCase, getUsers, getStudentHistory, uploadEvidence } from '../../services/api';
@@ -21,7 +22,7 @@ function ProgressBar({ steps, currentStep }) {
         <div className="absolute top-1/2 left-8 right-8 -translate-y-1/2 h-0.5 bg-[#edf2f7] z-0" />
         {/* Active progress fill line */}
         <div
-          className="absolute top-1/2 left-8 -translate-y-1/2 h-0.5 bg-gradient-to-r from-[#5c56e9] to-[#3b82f6] z-0 transition-all duration-500 ease-in-out"
+          className="absolute top-1/2 left-8 -translate-y-1/2 h-0.5 bg-[#3d3793] z-0 transition-all duration-500 ease-in-out"
           style={{ width: `${(currentStep / (steps.length - 1)) * 84}%` }}
         />
 
@@ -34,9 +35,9 @@ function ProgressBar({ steps, currentStep }) {
               <div
                 className={`w-9 h-9 rounded-xl flex items-center justify-center text-xs font-bold transition-all duration-300 ${
                   isDone
-                    ? 'bg-[#5c56e9] text-white shadow-sm'
+                    ? 'bg-[#3d3793] text-white shadow-sm'
                     : isCurrent
-                    ? 'bg-gradient-to-br from-[#5c56e9] to-[#3b82f6] text-white shadow-md shadow-[#5c56e9]/25 ring-4 ring-[#5c56e9]/15'
+                    ? 'bg-[#3d3793] text-white shadow-md/25 '
                     : 'bg-white border border-[#e2e8f0] text-[#94a3b8]'
                 }`}
               >
@@ -48,7 +49,7 @@ function ProgressBar({ steps, currentStep }) {
               </div>
               <span
                 className={`mt-2 text-xs font-semibold whitespace-nowrap transition-colors ${
-                  isCurrent ? 'text-[#5c56e9]' : isDone ? 'text-[#0f172a]' : 'text-[#94a3b8]'
+                  isCurrent ? 'text-[#3d3793]' : isDone ? 'text-[#0f172a]' : 'text-[#94a3b8]'
                 }`}
               >
                 {step}
@@ -71,7 +72,7 @@ function Field({ label, children }) {
 }
 
 const inputCls =
-  'bg-[#f8fafc] border border-[#e2e8f0] rounded-xl px-3.5 py-2.5 text-[#0f172a] text-sm placeholder:text-[#94a3b8] focus:outline-none focus:border-[#5c56e9] focus:ring-2 focus:ring-[#5c56e9]/20 transition-all font-medium';
+  'bg-[#f8fafc] border border-[#e2e8f0] rounded-xl px-3.5 py-2.5 text-[#0f172a] text-sm placeholder:text-[#94a3b8] focus:outline-none focus:border-[#3d3793] focus:ring-2 focus:ring-[#3d3793]/20 transition-all font-medium';
 
 function toTitleCase(value = '') {
   return String(value)
@@ -106,7 +107,7 @@ function StepStudentInfo({
   return (
     <div className="flex flex-col gap-5">
       <div className="flex items-center gap-2.5 pb-3 border-b border-[#edf2f7]">
-        <div className="w-8 h-8 rounded-xl bg-[#5c56e9]/10 text-[#5c56e9] flex items-center justify-center font-bold">
+        <div className="w-8 h-8 rounded-xl bg-[#3d3793]/10 text-[#3d3793] flex items-center justify-center font-bold">
           <span className="material-symbols-outlined text-[18px]">person</span>
         </div>
         <div>
@@ -138,7 +139,7 @@ function StepStudentInfo({
             />
             {lookupLoading && (
               <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                <div className="w-4 h-4 border-2 border-[#5c56e9] border-t-transparent rounded-full animate-spin" />
+                <div className="w-4 h-4 border-2 border-[#3d3793] border-t-transparent rounded-full animate-spin" />
               </div>
             )}
           </div>
@@ -216,7 +217,7 @@ function StepStudentInfo({
             <div className="flex items-center justify-between">
               <span className="font-bold text-[#0f172a] text-xs">Prior Disciplinary History (Informational)</span>
               <span className="text-[#64748b] text-[11px]">
-                Total Prior Cases: <strong className="text-[#0f172a]">{studentHistory.summary.total}</strong> · DAC Points: <strong className="text-[#5c56e9]">{studentHistory.student.total_points || 0}</strong>
+                Total Prior Cases: <strong className="text-[#0f172a]">{studentHistory.summary.total}</strong> · DAC Points: <strong className="text-[#3d3793]">{studentHistory.student.total_points || 0}</strong>
               </span>
             </div>
             {studentHistory.cases?.length > 0 ? (
@@ -269,7 +270,7 @@ function StepIncidentDetails({
   return (
     <div className="flex flex-col gap-5">
       <div className="flex items-center gap-2 mb-1">
-        <span className="material-symbols-outlined text-[#4f46e5] text-[22px]">report</span>
+        <span className="material-symbols-outlined text-[#3d3793] text-[22px]">report</span>
         <h2 className="text-[#0f172a] font-bold text-[18px] leading-7">Incident Details</h2>
       </div>
       <Field label="Offense Type *">
@@ -501,7 +502,7 @@ function StepIncidentDetails({
             className={`absolute bottom-3 right-3 h-10 w-10 rounded-full border shadow-sm flex items-center justify-center transition-all ${
               listening
                 ? 'bg-red-500 text-white border-red-500 animate-pulse'
-                : 'bg-white text-[#64748b] border-[#cbd5e1] hover:text-[#4f46e5] hover:border-[#4f46e5] hover:bg-[#f8fafc]'
+                : 'bg-white text-[#64748b] border-[#cbd5e1] hover:text-[#3d3793] hover:border-[#3d3793] hover:bg-[#f8fafc]'
             }`}
           >
             <span className="material-symbols-outlined text-[20px]">mic</span>
@@ -530,7 +531,7 @@ function StepEvidence({
   return (
     <div className="flex flex-col gap-5">
       <div className="flex items-center gap-2 mb-1">
-        <span className="material-symbols-outlined text-[#4f46e5] text-[20px]">attach_file</span>
+        <span className="material-symbols-outlined text-[#3d3793] text-[20px]">attach_file</span>
         <h2 className="text-[#0f172a] font-bold text-[18px] leading-7">Evidence Upload</h2>
       </div>
       <p className="text-[#64748b] text-sm leading-5">
@@ -546,7 +547,7 @@ function StepEvidence({
           if (dropped) onFileSelect(dropped);
         }}
         className={`h-44 flex flex-col items-center justify-center gap-2 bg-[#f8fafc] border-2 border-dashed rounded-lg transition-colors cursor-pointer ${
-          dragOver ? 'border-[#4f46e5] bg-[#f0f4ff]' : 'border-[#cbd5e1]'
+          dragOver ? 'border-[#3d3793] bg-[#f0f4ff]' : 'border-[#cbd5e1]'
         }`}
       >
         <input
@@ -560,7 +561,7 @@ function StepEvidence({
         />
         <span className="material-symbols-outlined text-[#94a3b8] text-[36px]">upload_file</span>
         <p className="text-sm">
-          <span className="font-semibold text-[#4f46e5]">Click to upload</span>
+          <span className="font-semibold text-[#3d3793]">Click to upload</span>
           <span className="text-[#64748b]"> or drag and drop</span>
         </p>
         <p className="text-[#64748b] text-xs">PDF, JPG, PNG or MP4 (MAX. 10MB)</p>
@@ -632,7 +633,7 @@ function StepReview({ form }) {
   return (
     <div className="flex flex-col gap-5">
       <div className="flex items-center gap-2 mb-1">
-        <span className="material-symbols-outlined text-[#4f46e5] text-[20px]">fact_check</span>
+        <span className="material-symbols-outlined text-[#3d3793] text-[20px]">fact_check</span>
         <h2 className="text-[#0f172a] font-bold text-[18px] leading-7">Review Submission</h2>
       </div>
       <p className="text-[#64748b] text-sm leading-5">Please verify all details before submitting.</p>
@@ -686,7 +687,7 @@ function StepSubmit({ caseResult, loading, error, onSubmit, onNavigateDashboard 
         <button
           type="button"
           onClick={onNavigateDashboard}
-          className="px-8 py-3 bg-[#4f46e5] text-white text-base font-medium rounded-lg hover:bg-[#162d6b] transition-colors"
+          className="px-8 py-3 bg-[#3d3793] text-white text-base font-medium rounded-lg hover:bg-[#162d6b] transition-colors"
         >
           Back to Dashboard
         </button>
@@ -697,7 +698,7 @@ function StepSubmit({ caseResult, loading, error, onSubmit, onNavigateDashboard 
   return (
     <div className="flex flex-col gap-5">
       <div className="flex items-center gap-2 mb-1">
-        <span className="material-symbols-outlined text-[#4f46e5] text-[20px]">send</span>
+        <span className="material-symbols-outlined text-[#3d3793] text-[20px]">send</span>
         <h2 className="text-[#0f172a] font-bold text-[18px] leading-7">Submit Case</h2>
       </div>
       <p className="text-[#64748b] text-sm leading-5">
@@ -713,7 +714,7 @@ function StepSubmit({ caseResult, loading, error, onSubmit, onNavigateDashboard 
         type="button"
         onClick={onSubmit}
         disabled={loading}
-        className="flex items-center justify-center gap-2 w-full px-8 py-4 bg-[#c02525] text-white text-base font-bold rounded-lg shadow-[0_10px_15px_-3px_rgba(192,37,37,0.3)] hover:bg-[#a81f1f] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+        className="flex items-center justify-center gap-2 w-full px-8 py-4 bg-[#c02525] text-white text-base font-bold rounded-lg hover:bg-[#a81f1f] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
       >
         {loading ? (
           <>
@@ -733,6 +734,7 @@ function StepSubmit({ caseResult, loading, error, onSubmit, onNavigateDashboard 
 
 export default function RegisterCase() {
   const navigate = useNavigate();
+  const { role } = useAuth();
   const usersCacheRef = useRef(null);
 
   const [currentStep, setCurrentStep] = useState(0);
@@ -1141,7 +1143,7 @@ export default function RegisterCase() {
     <StepSubmit
       caseResult={caseResult} loading={loading} error={error}
       onSubmit={handleSubmit}
-      onNavigateDashboard={() => navigate('/warden/cases')}
+      onNavigateDashboard={() => navigate(role === 'warden' ? '/warden/cases' : '/dashboard')}
     />,
   ];
 
@@ -1149,7 +1151,7 @@ export default function RegisterCase() {
     <DACLayout>
       <div className="max-w-6xl mx-auto flex flex-col gap-6">
         <div className="flex flex-col gap-2">
-          <h1 className="text-[#1e1b4b] text-2xl md:text-3xl font-black tracking-tight">
+          <h1 className="text-[#0f172a] text-2xl md:text-3xl font-semibold tracking-tight">
             Register New Disciplinary Case
           </h1>
           <p className="text-slate-500 text-xs sm:text-sm font-medium">
@@ -1162,7 +1164,7 @@ export default function RegisterCase() {
 
         <div className="flex flex-col lg:flex-row gap-6 items-start">
           <div className="flex-1 min-w-0 w-full">
-            <div className="bg-white rounded-[28px] border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.03)] p-6 md:p-8 flex flex-col gap-6">
+            <div className="bg-white rounded-2xl border border-slate-100 p-6 md:p-8 flex flex-col gap-6">
               <AnimatePresence mode="wait">
                 <motion.div
                   key={currentStep}
@@ -1191,7 +1193,7 @@ export default function RegisterCase() {
                     <button
                       type="button"
                       onClick={goNext}
-                      className="flex items-center gap-2 px-7 py-2.5 bg-[#5c54eb] hover:bg-indigo-700 text-white text-xs font-bold rounded-full shadow-md shadow-purple-500/20 transition-all active:scale-95"
+                      className="flex items-center gap-2 px-7 py-2.5 bg-[#3d3793] hover:bg-indigo-700 text-white text-xs font-bold rounded-full transition-all active:scale-95"
                     >
                       <span>Next Step</span>
                       <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
@@ -1203,10 +1205,10 @@ export default function RegisterCase() {
           </div>
 
           <div className="w-full lg:w-[320px] lg:flex-shrink-0 flex flex-col gap-4">
-            <div className="bg-white border border-slate-100 rounded-[28px] shadow-[0_8px_30px_rgb(0,0,0,0.03)] p-5 flex flex-col gap-3">
+            <div className="bg-white border border-slate-100 rounded-2xl p-5 flex flex-col gap-3">
               <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-[#5c54eb] text-[18px]">info</span>
-                <h3 className="text-[#1e1b4b] font-bold text-sm leading-5">Registration Guide</h3>
+                <span className="material-symbols-outlined text-[#3d3793] text-[18px]">info</span>
+                <h3 className="text-[#0f172a] font-bold text-sm leading-5">Registration Guide</h3>
               </div>
               <div className="flex flex-col gap-3">
                 {[
@@ -1216,7 +1218,7 @@ export default function RegisterCase() {
                   'Summary will generate a verifiable tracking token upon submission.',
                 ].map((tip, i) => (
                   <div key={i} className="flex items-start gap-2.5">
-                    <div className="w-5 h-5 rounded-lg bg-purple-50 text-[#5c54eb] flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <div className="w-5 h-5 rounded-lg bg-purple-50 text-[#3d3793] flex items-center justify-center flex-shrink-0 mt-0.5">
                       <span className="text-[11px] font-bold">{i + 1}</span>
                     </div>
                     <p className="text-slate-500 text-xs leading-relaxed">{tip}</p>
@@ -1225,13 +1227,13 @@ export default function RegisterCase() {
               </div>
             </div>
 
-            <div className="relative rounded-[28px] p-5 overflow-hidden border bg-gradient-to-br from-purple-500/5 via-indigo-500/5 to-white border-purple-100 shadow-[0_8px_30px_rgb(0,0,0,0.02)]">
+            <div className="relative rounded-2xl p-5 overflow-hidden border bg-white border-slate-200/80">
               <div className="relative flex flex-col gap-2.5">
                 <div className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-[#5c54eb] text-[18px]">
+                  <span className="material-symbols-outlined text-[#3d3793] text-[18px]">
                     {caseResult ? 'check_circle' : 'verified'}
                   </span>
-                  <span className="text-[#5c54eb] font-bold text-xs uppercase tracking-wider">
+                  <span className="text-[#3d3793] font-bold text-xs uppercase tracking-wider">
                     {caseResult ? 'Case Registered' : 'Token Generator'}
                   </span>
                 </div>
@@ -1241,7 +1243,7 @@ export default function RegisterCase() {
                     : 'An immutable token ID will be issued upon form submission.'}
                 </p>
                 <div className="flex items-center justify-between bg-white border border-purple-100 rounded-2xl px-3.5 py-2.5 shadow-2xs">
-                  <span className="text-[#5c54eb] font-mono font-bold text-sm">
+                  <span className="text-[#3d3793] font-mono font-bold text-sm">
                     {caseResult ? caseResult.token : 'DAC-2026-XXXX'}
                   </span>
                   {caseResult && (
@@ -1249,7 +1251,7 @@ export default function RegisterCase() {
                       type="button"
                       title="Copy token"
                       onClick={() => navigator.clipboard.writeText(caseResult.token)}
-                      className="text-[#5c54eb] hover:text-indigo-800"
+                      className="text-[#3d3793] hover:text-indigo-800"
                     >
                       <span className="material-symbols-outlined text-[16px]">content_copy</span>
                     </button>
@@ -1263,7 +1265,7 @@ export default function RegisterCase() {
                       { label: 'DAC Points', value: `+${caseResult.penaltyPoints}` },
                     ].map(({ label, value }) => (
                       <div key={label} className="bg-white border border-purple-100 rounded-xl p-2 text-center shadow-2xs">
-                        <p className="text-[#5c54eb] font-bold text-xs">{value}</p>
+                        <p className="text-[#3d3793] font-bold text-xs">{value}</p>
                         <p className="text-slate-400 text-[9px] font-bold">{label}</p>
                       </div>
                     ))}

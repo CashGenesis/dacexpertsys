@@ -2,6 +2,7 @@ import { Router } from 'express';
 import {
 	getAllUsersController,
 	getUserByIdController,
+	getMeController,
 	createUserController,
 	updateUserController,
 	deleteUserController,
@@ -13,6 +14,7 @@ import { requireRoles } from '../middleware/auth.middleware.js';
 const router = Router();
 
 router.get('/', getAllUsersController);
+router.get('/me', getMeController);
 router.get('/:id', requireRoles('admin'), getUserByIdController);
 router.post('/', requireRoles('admin'), createUserController);
 router.put('/:id', requireRoles('admin'), updateUserController);

@@ -10,28 +10,13 @@ import AdminSettings from './pages/AdminSettings.jsx';
 import RulesWeights from './pages/admin/RulesWeights.jsx';
 import UserManagement from './pages/admin/UserManagement.jsx';
 import SystemConfig from './pages/admin/SystemConfig.jsx';
-import ManageCase from './pages/ManageCase.jsx';
-import ViewCase from './pages/ViewCase.jsx';
-import StudentLayout from './layouts/StudentLayout.jsx';
+import CaseDetail from './pages/CaseDetail.jsx';
+import CaseList from './pages/CaseList.jsx';
+import Notifications from './pages/Notifications.jsx';
+import Profile from './pages/Profile.jsx';
+import RegisterCase from './pages/warden/RegisterCase.jsx';
 import StudentDashboard from './pages/student/StudentDashboard.jsx';
-import StudentCases from './pages/student/StudentCases.jsx';
-import StudentCaseDetails from './pages/student/StudentCaseDetails.jsx';
-import StudentPlaceholder from './pages/student/StudentPlaceholder.jsx';
-import WardenDashboard from './pages/warden/WardenDashboard.jsx';
-import WardenRegisterCase from './pages/warden/RegisterCase.jsx';
-import WardenMyCases from './pages/warden/MyCases.jsx';
-import WardenManageCase from './pages/warden/ManageCase.jsx';
-import WardenViewCase from './pages/warden/ViewCase.jsx';
-import WardenNotifications from './pages/warden/Notifications.jsx';
-import WardenProfile from './pages/warden/Profile.jsx';
-import ChiefWardenDashboard from './pages/chiefwarden/ChiefWardenDashboard.jsx';
-import ChiefWardenRegisterCase from './pages/chiefwarden/RegisterCase.jsx';
-import ChiefWardenIncomingCases from './pages/chiefwarden/IncomingCases.jsx';
-import ChiefWardenManageCase from './pages/chiefwarden/ManageCase.jsx';
-import ChiefWardenViewCase from './pages/chiefwarden/ViewCase.jsx';
-import ChiefWardenNotifications from './pages/chiefwarden/Notifications.jsx';
-import ChiefWardenProfile from './pages/chiefwarden/Profile.jsx';
-import DswDashboard from './pages/dsw/DswDashboard.jsx';
+import StudentPolicy from './pages/student/StudentPolicy.jsx';
 import Settings from './pages/Settings.jsx';
 import DacChatbot from './components/DacChatbot.jsx';
 
@@ -63,47 +48,45 @@ function AnimatedRoutes() {
         <Route path="/student-dashboard" element={<ProtectedRoute roles={['student']}><Navigate to="/student/dashboard" replace /></ProtectedRoute>} />
         <Route path="/warden-dashboard" element={<ProtectedRoute roles={['warden']}><Navigate to="/warden/dashboard" replace /></ProtectedRoute>} />
         <Route path="/chief-dashboard" element={<ProtectedRoute roles={['chief_warden']}><Navigate to="/chief-warden/dashboard" replace /></ProtectedRoute>} />
-        <Route path="/dsw-dashboard" element={<ProtectedRoute roles={['dsw']}><DswDashboard /></ProtectedRoute>} />
         <Route path="/admin-dashboard" element={<ProtectedRoute roles={['admin']}><Navigate to="/dashboard" replace /></ProtectedRoute>} />
 
-        {/* Protected pages */}
+        {/* Admin & DSW */}
         <Route path="/dashboard" element={<ProtectedRoute roles={['admin', 'dsw']}><Dashboard /></ProtectedRoute>} />
-        <Route path="/register-case" element={<ProtectedRoute roles={['warden']}><WardenRegisterCase /></ProtectedRoute>} />
+        <Route path="/dsw-dashboard" element={<ProtectedRoute roles={['dsw']}><Dashboard /></ProtectedRoute>} />
+        <Route path="/register-case" element={<ProtectedRoute roles={['dsw', 'admin']}><RegisterCase /></ProtectedRoute>} />
         <Route path="/reports" element={<ProtectedRoute roles={['admin', 'dsw']}><Reports /></ProtectedRoute>} />
-        <Route path="/cases/:token" element={<ProtectedRoute roles={['admin', 'dsw']}><ManageCase /></ProtectedRoute>} />
-        <Route path="/view-case/:token" element={<ProtectedRoute roles={['admin', 'dsw']}><ViewCase /></ProtectedRoute>} />
+        <Route path="/cases/:id" element={<ProtectedRoute roles={['admin', 'dsw']}><CaseDetail /></ProtectedRoute>} />
+        <Route path="/view-case/:id" element={<ProtectedRoute roles={['admin', 'dsw']}><CaseDetail /></ProtectedRoute>} />
         <Route path="/settings" element={<ProtectedRoute roles={['student', 'warden', 'chief_warden', 'dsw', 'admin']}><Settings /></ProtectedRoute>} />
 
-        {/* Student area — separate layout */}
-        <Route path="/student" element={<ProtectedRoute roles={['student']}><StudentLayout /></ProtectedRoute>}>
-          <Route index element={<Navigate to="dashboard" replace />} />
-          <Route path="dashboard" element={<StudentDashboard />} />
-          <Route path="cases" element={<StudentCases />} />
-          <Route path="cases/:token" element={<StudentCaseDetails />} />
-          <Route path="penalty-points" element={<StudentPlaceholder title="Penalty Points" />} />
-          <Route path="profile" element={<StudentPlaceholder title="Profile" />} />
-          <Route path="disciplinary-policy" element={<StudentPlaceholder title="Disciplinary Policy" />} />
-        </Route>
+        {/* Student */}
+        <Route path="/student" element={<ProtectedRoute roles={['student']}><Navigate to="/student/dashboard" replace /></ProtectedRoute>} />
+        <Route path="/student/dashboard" element={<ProtectedRoute roles={['student']}><StudentDashboard /></ProtectedRoute>} />
+        <Route path="/student/cases" element={<ProtectedRoute roles={['student']}><CaseList /></ProtectedRoute>} />
+        <Route path="/student/cases/:id" element={<ProtectedRoute roles={['student']}><CaseDetail /></ProtectedRoute>} />
+        <Route path="/student/penalty-points" element={<ProtectedRoute roles={['student']}><Navigate to="/student/dashboard" replace /></ProtectedRoute>} />
+        <Route path="/student/profile" element={<ProtectedRoute roles={['student']}><Profile /></ProtectedRoute>} />
+        <Route path="/student/disciplinary-policy" element={<ProtectedRoute roles={['student']}><StudentPolicy /></ProtectedRoute>} />
 
-        {/* Warden area */}
-        <Route path="/warden/dashboard" element={<ProtectedRoute roles={['warden']}><WardenDashboard /></ProtectedRoute>} />
-        <Route path="/warden/register" element={<ProtectedRoute roles={['warden']}><WardenRegisterCase /></ProtectedRoute>} />
-        <Route path="/warden/cases" element={<ProtectedRoute roles={['warden']}><WardenMyCases /></ProtectedRoute>} />
-        <Route path="/warden/cases/:id" element={<ProtectedRoute roles={['warden']}><WardenManageCase /></ProtectedRoute>} />
-        <Route path="/warden/view/:id" element={<ProtectedRoute roles={['warden']}><WardenViewCase /></ProtectedRoute>} />
-        <Route path="/warden/notifications" element={<ProtectedRoute roles={['warden']}><WardenNotifications /></ProtectedRoute>} />
-        <Route path="/warden/profile" element={<ProtectedRoute roles={['warden']}><WardenProfile /></ProtectedRoute>} />
+        {/* Warden */}
+        <Route path="/warden/dashboard" element={<ProtectedRoute roles={['warden']}><Dashboard /></ProtectedRoute>} />
+        <Route path="/warden/register" element={<ProtectedRoute roles={['warden']}><RegisterCase /></ProtectedRoute>} />
+        <Route path="/warden/cases" element={<ProtectedRoute roles={['warden']}><CaseList /></ProtectedRoute>} />
+        <Route path="/warden/cases/:id" element={<ProtectedRoute roles={['warden']}><CaseDetail /></ProtectedRoute>} />
+        <Route path="/warden/view/:id" element={<ProtectedRoute roles={['warden']}><CaseDetail /></ProtectedRoute>} />
+        <Route path="/warden/notifications" element={<ProtectedRoute roles={['warden']}><Notifications /></ProtectedRoute>} />
+        <Route path="/warden/profile" element={<ProtectedRoute roles={['warden']}><Profile /></ProtectedRoute>} />
 
-        {/* Chief Warden area */}
-        <Route path="/chief-warden/dashboard" element={<ProtectedRoute roles={['chief_warden']}><ChiefWardenDashboard /></ProtectedRoute>} />
-        <Route path="/chief-warden/register" element={<ProtectedRoute roles={['chief_warden']}><ChiefWardenRegisterCase /></ProtectedRoute>} />
-        <Route path="/chief-warden/cases" element={<ProtectedRoute roles={['chief_warden']}><ChiefWardenIncomingCases /></ProtectedRoute>} />
-        <Route path="/chief-warden/cases/:id" element={<ProtectedRoute roles={['chief_warden']}><ChiefWardenManageCase /></ProtectedRoute>} />
-        <Route path="/chief-warden/view/:id" element={<ProtectedRoute roles={['chief_warden']}><ChiefWardenViewCase /></ProtectedRoute>} />
-        <Route path="/chief-warden/notifications" element={<ProtectedRoute roles={['chief_warden']}><ChiefWardenNotifications /></ProtectedRoute>} />
-        <Route path="/chief-warden/profile" element={<ProtectedRoute roles={['chief_warden']}><ChiefWardenProfile /></ProtectedRoute>} />
+        {/* Chief Warden */}
+        <Route path="/chief-warden/dashboard" element={<ProtectedRoute roles={['chief_warden']}><Dashboard /></ProtectedRoute>} />
+        <Route path="/chief-warden/register" element={<ProtectedRoute roles={['chief_warden']}><RegisterCase /></ProtectedRoute>} />
+        <Route path="/chief-warden/cases" element={<ProtectedRoute roles={['chief_warden']}><CaseList /></ProtectedRoute>} />
+        <Route path="/chief-warden/cases/:id" element={<ProtectedRoute roles={['chief_warden']}><CaseDetail /></ProtectedRoute>} />
+        <Route path="/chief-warden/view/:id" element={<ProtectedRoute roles={['chief_warden']}><CaseDetail /></ProtectedRoute>} />
+        <Route path="/chief-warden/notifications" element={<ProtectedRoute roles={['chief_warden']}><Notifications /></ProtectedRoute>} />
+        <Route path="/chief-warden/profile" element={<ProtectedRoute roles={['chief_warden']}><Profile /></ProtectedRoute>} />
 
-        {/* Admin Settings — nested */}
+        {/* Admin settings — nested inside one shell */}
         <Route path="/admin-settings" element={<ProtectedRoute roles={['admin']}><AdminSettings /></ProtectedRoute>}>
           <Route index element={<Navigate to="rules-weights" replace />} />
           <Route path="rules-weights" element={<RulesWeights />} />

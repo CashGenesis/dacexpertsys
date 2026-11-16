@@ -311,3 +311,11 @@ export async function deleteUser(userId) {
     method: 'DELETE',
   });
 }
+
+export async function getMe() {
+  return fetchJson('/api/users/me');
+}
+
+export async function getPolicies() {
+  return fetchJson('/api/policies');
+}

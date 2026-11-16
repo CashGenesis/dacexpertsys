@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { askChatbot } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { OPEN_ASSISTANT_EVENT } from '../lib/assistant';
 
 const DEFAULT_SUGGESTIONS = [
   'What are the DAC points for weed?',
@@ -89,9 +90,9 @@ function SourceCitations({ sources, role, navigate }) {
   );
 }
 
+
 export default function DacChatbot() {
   const { role, isAuthenticated } = useAuth();
-  const location = useLocation();
   const navigate = useNavigate();
 
   const [open, setOpen] = useState(false);
@@ -105,7 +106,8 @@ export default function DacChatbot() {
   const messagesScrollRef = useRef(null);
   const textareaRef = useRef(null);
 
-  const visible = isAuthenticated && ['warden', 'chief_warden', 'dsw', 'admin'].includes(role) && /dashboard/.test(location.pathname);
+  // Opened from the "Ask AI" button in the app top bar (staff only).
+  const visible = isAuthenticated && ['warden', 'chief_warden', 'dsw', 'admin'].includes(role);
 
   // Initialize conversation ID when opened
   useEffect(() => {
@@ -120,6 +122,13 @@ export default function DacChatbot() {
       endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
     }
   }, [messages, loading, view]);
+
+  // Top-bar "Ask AI" buttons toggle the panel through a window event.
+  useEffect(() => {
+    const toggle = () => setOpen((val) => !val);
+    window.addEventListener(OPEN_ASSISTANT_EVENT, toggle);
+    return () => window.removeEventListener(OPEN_ASSISTANT_EVENT, toggle);
+  }, []);
 
   if (!visible) return null;
 
@@ -168,7 +177,7 @@ export default function DacChatbot() {
   const isConversation = view === 'conversation';
 
   return (
-    <div className="fixed bottom-6 right-6 z-[60] font-sans">
+    <div className="fixed right-6 top-20 z-[60] font-sans">
       {open && (
         <section
           aria-label="DAC Assistant Chat Panel"
@@ -356,18 +365,6 @@ export default function DacChatbot() {
         </section>
       )}
 
-      {/* Floating Action Toggle Button */}
-      <button
-        id="dac-chatbot-launcher"
-        type="button"
-        onClick={() => setOpen((val) => !val)}
-        className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#5c54eb] text-white shadow-xl shadow-purple-500/35 transition-all hover:scale-105 active:scale-95"
-        aria-label="Toggle DAC AI assistant"
-      >
-        <span className="material-symbols-outlined text-[26px]">
-          {open ? 'close' : 'auto_awesome'}
-        </span>
-      </button>
     </div>
   );
 }

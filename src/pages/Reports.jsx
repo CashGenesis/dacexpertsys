@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import DACLayout from '../components/layout/DACLayout';
+import { Button, PageHeader } from '../components/cases/parts';
+
+const REPORTS_PAGE_SIZE = 10;
 import { pageVariants, listVariants, itemVariants } from '../lib/motion';
 import { getCases, getUsers } from '../services/api';
 
@@ -47,10 +50,10 @@ const BackIcon = () => (
 
 const GridIcon = () => (
   <svg width="20" height="18" viewBox="0 0 20 18" fill="none">
-    <rect x="1" y="1" width="7" height="7" rx="1" stroke="#4f46e5" strokeWidth="1.4" />
-    <rect x="12" y="1" width="7" height="7" rx="1" stroke="#4f46e5" strokeWidth="1.4" />
-    <rect x="1" y="10" width="7" height="7" rx="1" stroke="#4f46e5" strokeWidth="1.4" />
-    <rect x="12" y="10" width="7" height="7" rx="1" stroke="#4f46e5" strokeWidth="1.4" />
+    <rect x="1" y="1" width="7" height="7" rx="1" stroke="#3d3793" strokeWidth="1.4" />
+    <rect x="12" y="1" width="7" height="7" rx="1" stroke="#3d3793" strokeWidth="1.4" />
+    <rect x="1" y="10" width="7" height="7" rx="1" stroke="#3d3793" strokeWidth="1.4" />
+    <rect x="12" y="10" width="7" height="7" rx="1" stroke="#3d3793" strokeWidth="1.4" />
   </svg>
 );
 
@@ -165,6 +168,7 @@ export default function Reports() {
   const hasLoggedResponseRef = useRef(false);
   const [selectedCase, setSelectedCase] = useState(null);
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(0);
   const [cases, setCases] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -238,11 +242,11 @@ export default function Reports() {
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-8">
         <div>
           <div className="flex items-center gap-2 text-sm text-[#94a3b8] mb-3">
-            <button onClick={() => setSelectedCase(null)} className="hover:text-[#4f46e5] transition-colors">Cases</button>
+            <button onClick={() => setSelectedCase(null)} className="hover:text-[#3d3793] transition-colors">Cases</button>
             <ChevronRightIcon />
-            <span className="text-[#4f46e5] font-medium">Case {selectedCase.id}</span>
+            <span className="text-[#3d3793] font-medium">Case {selectedCase.id}</span>
             <ChevronRightIcon />
-            <span className="text-[#4f46e5] font-medium">Recommendation</span>
+            <span className="text-[#3d3793] font-medium">Recommendation</span>
           </div>
           <h1 className="text-[#0f172a] text-[32px] font-bold leading-9 mb-2">
             Recommendation Result
@@ -253,10 +257,10 @@ export default function Reports() {
         </div>
 
         <div className="flex gap-3 mt-2 shrink-0">
-          <button onClick={() => setSelectedCase(null)} className="flex items-center gap-2 border border-[#e2e8f0] bg-white text-[#64748b] text-sm font-medium px-4 py-2.5 rounded-lg hover:border-[#4f46e5] hover:text-[#4f46e5] transition-colors shadow-sm">
+          <button onClick={() => setSelectedCase(null)} className="flex items-center gap-2 border border-[#e2e8f0] bg-white text-[#64748b] text-sm font-medium px-4 py-2.5 rounded-lg hover:border-[#3d3793] hover:text-[#3d3793] transition-colors shadow-sm">
             <BackIcon /> Back to Cases
           </button>
-          <button className="flex items-center gap-2 border border-[#e2e8f0] bg-white text-[#64748b] text-sm font-medium px-4 py-2.5 rounded-lg hover:border-[#4f46e5] hover:text-[#4f46e5] transition-colors shadow-sm">
+          <button className="flex items-center gap-2 border border-[#e2e8f0] bg-white text-[#64748b] text-sm font-medium px-4 py-2.5 rounded-lg hover:border-[#3d3793] hover:text-[#3d3793] transition-colors shadow-sm">
             <DownloadIcon /> Download Report
           </button>
         </div>
@@ -271,9 +275,9 @@ export default function Reports() {
         <motion.div variants={itemVariants} className="flex-1 min-w-0 flex flex-col gap-6">
 
           <div className="bg-white border border-[#e2e8f0] rounded-xl shadow-sm overflow-hidden">
-            <div className="h-2 bg-[#4f46e5] w-full" />
+            <div className="h-2 bg-[#3d3793] w-full" />
             <div className="p-8 flex gap-6">
-              <div className="w-[59px] h-[60px] rounded-xl bg-[#4f46e5] flex items-center justify-center shrink-0">
+              <div className="w-[59px] h-[60px] rounded-xl bg-[#3d3793] flex items-center justify-center shrink-0">
                 <ScalesIcon />
               </div>
               <div className="flex-1 min-w-0">
@@ -285,10 +289,10 @@ export default function Reports() {
                   and the student's prior disciplinary history, the system recommends this punishment.
                 </p>
                 <div className="flex gap-3">
-                  <button className="flex items-center gap-2 bg-[#4f46e5] text-white text-sm font-bold px-5 py-2.5 rounded-lg hover:bg-[#162d6b] transition-colors shadow-sm">
+                  <button className="flex items-center gap-2 bg-[#3d3793] text-white text-sm font-bold px-5 py-2.5 rounded-lg hover:bg-[#162d6b] transition-colors shadow-sm">
                     <CheckCircleIcon /> Confirm & Apply
                   </button>
-                  <button className="flex items-center gap-2 border border-[#e2e8f0] text-[#64748b] text-sm font-medium px-5 py-2.5 rounded-lg hover:border-[#4f46e5] hover:text-[#4f46e5] transition-colors">
+                  <button className="flex items-center gap-2 border border-[#e2e8f0] text-[#64748b] text-sm font-medium px-5 py-2.5 rounded-lg hover:border-[#3d3793] hover:text-[#3d3793] transition-colors">
                     <EditIcon /> Modify Action
                   </button>
                 </div>
@@ -357,11 +361,8 @@ export default function Reports() {
       animate="visible"
       className="max-w-[1152px] mx-auto"
     >
-      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-8">
-        <div>
-          <h1 className="text-[#0f172a] text-[32px] font-bold leading-9 mb-2">AI Case Recommendations</h1>
-          <p className="text-[#64748b] text-lg leading-7">Select a case to view its AI-generated penalty recommendations.</p>
-        </div>
+      <div className="mb-6">
+        <PageHeader title="AI Case Recommendations" subtitle="Select a case to view its AI-generated penalty recommendation." />
       </div>
 
       {loading && <p className="text-[#64748b] text-sm mb-4">Loading...</p>}
@@ -373,19 +374,19 @@ export default function Reports() {
         animate="visible"
         className="flex flex-col gap-4"
       >
-        {filteredCases.map((c) => (
+        {filteredCases.slice(page * REPORTS_PAGE_SIZE, (page + 1) * REPORTS_PAGE_SIZE).map((c) => (
           <motion.div
             key={c.id}
             variants={itemVariants}
             onClick={() => setSelectedCase(c)}
-            className="bg-white border border-[#e2e8f0] rounded-xl shadow-sm p-6 flex flex-col md:flex-row md:items-center justify-between gap-6 cursor-pointer hover:border-[#4f46e5] hover:shadow-md transition-all group"
+            className="bg-white border border-[#e2e8f0] rounded-xl shadow-sm p-6 flex flex-col md:flex-row md:items-center justify-between gap-6 cursor-pointer hover:border-[#3d3793] hover:shadow-md transition-all group"
           >
             <div className="flex items-center gap-5">
               <div className="w-12 h-12 rounded-full bg-[#f1f5f9] flex items-center justify-center text-lg font-bold text-[#64748b]">
                 {c.studentName.split(' ').map(n => n[0]).join('')}
               </div>
               <div>
-                <h3 className="text-lg font-bold text-[#0f172a] group-hover:text-[#4f46e5] transition-colors">{c.id} - {c.studentName}</h3>
+                <h3 className="text-lg font-bold text-[#0f172a] group-hover:text-[#3d3793] transition-colors">{c.id} - {c.studentName}</h3>
                 <p className="text-[#64748b] text-sm">
                   <span className="font-medium text-[#475569]">{c.offense}</span> • ID: {c.studentId} • {c.date}
                 </p>
@@ -399,21 +400,41 @@ export default function Reports() {
                   {c.status}
                 </p>
               </div>
-              <button className="hidden sm:flex border border-[#e2e8f0] bg-white text-[#4f46e5] text-sm font-medium px-4 py-2 rounded-lg group-hover:bg-[#4f46e5] group-hover:text-white transition-colors">
+              <button className="hidden sm:flex border border-[#e2e8f0] bg-white text-[#3d3793] text-sm font-medium px-4 py-2 rounded-lg group-hover:bg-[#3d3793] group-hover:text-white transition-colors">
                 View Recommendation
               </button>
-              <span className="text-[#94a3b8] group-hover:text-[#4f46e5] transition-colors">
+              <span className="text-[#94a3b8] group-hover:text-[#3d3793] transition-colors">
                 <ChevronRightIcon />
               </span>
             </div>
           </motion.div>
         ))}
       </motion.div>
+
+      {/* Render one page at a time: thousands of animated rows freeze the browser. */}
+      <div className="flex items-center justify-between mt-6 text-sm text-slate-500">
+        <span className="tabular-nums">
+          {filteredCases.length ? page * REPORTS_PAGE_SIZE + 1 : 0}–{Math.min((page + 1) * REPORTS_PAGE_SIZE, filteredCases.length)} of{' '}
+          {filteredCases.length.toLocaleString('en-IN')} cases
+        </span>
+        <div className="flex gap-2">
+          <Button variant="outline" disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>
+            Previous
+          </Button>
+          <Button
+            variant="outline"
+            disabled={(page + 1) * REPORTS_PAGE_SIZE >= filteredCases.length}
+            onClick={() => setPage((p) => p + 1)}
+          >
+            Next
+          </Button>
+        </div>
+      </div>
     </motion.div>
   );
 
   return (
-    <DACLayout searchValue={search} onSearchChange={setSearch}>
+    <DACLayout searchValue={search} onSearchChange={(value) => { setSearch(value); setPage(0); }}>
       <div className="font-inter">
         <AnimatePresence mode="wait">
           {selectedCase ? (

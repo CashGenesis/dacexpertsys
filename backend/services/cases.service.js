@@ -19,6 +19,8 @@ const CASE_WITH_STUDENT_SELECT = `
   JOIN users ON users.id = cases.student_id
 `;
 
+const ROLE_LABELS = { warden: 'Warden', chief_warden: 'Chief Warden', dsw: 'DSW', admin: 'Admin' };
+
 function canActOnRole(role) {
   return ['chief_warden', 'dsw', 'admin'].includes(String(role || '').toLowerCase());
 }
@@ -31,6 +33,8 @@ function getNextWorkflowState(role) {
       assignedToRole: 'dsw',
       notifyRole: 'dsw',
       notifyMessage: 'Case approved by Chief Warden. Ready for review.',
+      event: 'Approved by Chief Warden and forwarded to DSW.',
+      stageLabel: 'DSW review',
     };
   }
 
@@ -40,6 +44,8 @@ function getNextWorkflowState(role) {
       assignedToRole: 'admin',
       notifyRole: 'admin',
       notifyMessage: 'Case forwarded by DSW. Final decision required.',
+      event: 'Approved by DSW and forwarded to Admin.',
+      stageLabel: 'Admin decision',
     };
   }
 
@@ -49,6 +55,8 @@ function getNextWorkflowState(role) {
       assignedToRole: null,
       notifyRole: null,
       notifyMessage: null,
+      event: 'Final decision recorded by Admin. Case resolved.',
+      stageLabel: 'resolved',
     };
   }
 
@@ -99,7 +107,7 @@ export async function getAllCasesService({ requesterRole, requesterId, role, sta
   return result.rows;
 }
 
-export async function createCaseService(payload, requesterId) {
+export async function createCaseService(payload, requesterId, requesterRole = 'warden') {
   const {
     student_id: studentId,
     offense_type: offenseType,
@@ -119,6 +127,7 @@ export async function createCaseService(payload, requesterId) {
     INSERT INTO cases (
       student_id,
       created_by,
+      created_by_role,
       assigned_to_role,
       reported_by,
       offense_type,
@@ -130,7 +139,7 @@ export async function createCaseService(payload, requesterId) {
       penalty_points,
       evidence_url
     )
-    VALUES ($1, $2, $3, $2, $4, $5, $6, $7, $8, $9, $10, $11)
+    VALUES ($1, $2, $12, $3, $2, $4, $5, $6, $7, $8, $9, $10, $11)
     RETURNING *
   `;
 
@@ -146,14 +155,23 @@ export async function createCaseService(payload, requesterId) {
       incidentDate,
       penaltyPoints,
       evidenceUrl,
+      requesterRole,
     ];
     const result = await client.query(query, values);
-    const createdCase = result.rows[0];
+    // Give app-created cases the same public ID format as imported ones: DAC-<year>-<5-digit id>.
+    const withPublicId = await client.query(
+      `UPDATE cases
+       SET external_case_id = 'DAC-' || to_char(COALESCE(incident_date, NOW()), 'YYYY') || '-' || lpad(id::text, 5, '0')
+       WHERE id = $1 AND external_case_id IS NULL
+       RETURNING *`,
+      [result.rows[0].id]
+    );
+    const createdCase = withPublicId.rows[0] || result.rows[0];
 
     await createNotificationsForRoleService(
       {
         role: 'chief_warden',
-        message: 'New case created by Warden. Click to review.',
+        message: `New case created by ${ROLE_LABELS[requesterRole] || 'staff'}. Click to review.`,
         caseId: createdCase.id,
       },
       client,
@@ -244,11 +262,14 @@ export async function approveCaseService(caseId, actor) {
       SET
         status = $2::case_status,
         assigned_to_role = $3::user_role,
-        resolved_by = CASE WHEN $2::case_status = 'resolved'::case_status THEN $4 ELSE resolved_by END
+        resolved_by = CASE WHEN $2::case_status = 'resolved'::case_status THEN $4 ELSE resolved_by END,
+        resolved_by_role = CASE WHEN $2::case_status = 'resolved'::case_status THEN $5::user_role ELSE resolved_by_role END,
+        resolved_at = CASE WHEN $2::case_status = 'resolved'::case_status THEN NOW() ELSE resolved_at END,
+        updated_at = NOW()
       WHERE id = $1
       RETURNING *
       `,
-      [caseId, nextState.status, nextState.assignedToRole, actor.id],
+      [caseId, nextState.status, nextState.assignedToRole, actor.id, actor.role],
     );
     const updatedCase = updated.rows[0];
 
@@ -264,7 +285,10 @@ export async function approveCaseService(caseId, actor) {
     }
 
     if (updatedCase.created_by) {
-      const creatorMessage = `Case #${updatedCase.id} moved to ${nextState.status.replace('_', ' ')}.`;
+      const caseRef = updatedCase.external_case_id || `#${updatedCase.id}`;
+      const creatorMessage = nextState.status === 'resolved'
+        ? `Case ${caseRef} has been resolved.`
+        : `Case ${caseRef} moved to ${nextState.stageLabel}.`;
       await createNotificationService(
         {
           userId: updatedCase.created_by,
@@ -278,7 +302,7 @@ export async function approveCaseService(caseId, actor) {
     await createCaseTimelineService(
       {
         caseId: updatedCase.id,
-        event: `Workflow updated to ${nextState.status.replace('_', ' ')}.`,
+        event: nextState.event,
         performedBy: actor.id,
       },
       client,
@@ -311,6 +335,8 @@ export async function updateCaseService(caseId, payload, actor) {
     severity: 'severity',
     penalty_points: 'penalty_points',
     evidence_url: 'evidence_url',
+    fine: 'fine',
+    decision: 'decision',
   };
 
   Object.entries(allowedFields).forEach(([key, column]) => {

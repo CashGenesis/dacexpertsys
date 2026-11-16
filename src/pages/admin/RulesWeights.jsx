@@ -166,7 +166,7 @@ export default function RulesWeights() {
         <button
           type="button"
           onClick={openCreate}
-          className="flex items-center gap-2 bg-[#4f46e5] hover:bg-[#162d6b] text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors shadow-sm"
+          className="flex items-center gap-2 bg-[#3d3793] hover:bg-[#162d6b] text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors shadow-sm"
         >
           <span className="material-symbols-outlined text-[18px]">add</span>
           Add Rule
@@ -188,7 +188,7 @@ export default function RulesWeights() {
       {/* Stats row */}
       <div className="grid grid-cols-4 gap-4">
           {[
-            { label: 'Total Rules', value: stats.total, icon: 'rule', color: 'text-[#4f46e5]', bg: 'bg-[#eef2fb]' },
+            { label: 'Total Rules', value: stats.total, icon: 'rule', color: 'text-[#3d3793]', bg: 'bg-[#eef2fb]' },
             { label: 'Critical', value: stats.critical, icon: 'crisis_alert', color: 'text-red-600', bg: 'bg-red-50' },
             { label: 'High', value: stats.high, icon: 'warning', color: 'text-orange-600', bg: 'bg-orange-50' },
             { label: 'Avg Weight', value: stats.avgWeight, icon: 'scale', color: 'text-emerald-600', bg: 'bg-emerald-50' },
@@ -249,7 +249,7 @@ export default function RulesWeights() {
                         <div className="flex items-center gap-3">
                           <div className="w-28 h-1.5 bg-[#f1f5f9] rounded-full overflow-hidden">
                             <div
-                              className="h-full bg-[#4f46e5] rounded-full"
+                              className="h-full bg-[#3d3793] rounded-full"
                               style={{ width: `${Math.min(Number(rule.weight || 0), 100)}%` }}
                             />
                           </div>
@@ -266,7 +266,7 @@ export default function RulesWeights() {
                           <button
                             type="button"
                             onClick={() => openEdit(rule)}
-                            className="p-1.5 text-[#64748b] hover:text-[#4f46e5] hover:bg-[#eef2fb] rounded-lg transition-colors"
+                            className="p-1.5 text-[#64748b] hover:text-[#3d3793] hover:bg-[#eef2fb] rounded-lg transition-colors"
                             title="Edit"
                           >
                             <span className="material-symbols-outlined text-[18px]">edit</span>
@@ -307,7 +307,7 @@ export default function RulesWeights() {
                   type="text"
                   value={form.name}
                   onChange={handleFormChange('name')}
-                  className="w-full bg-[#f8fafc] border border-[#e2e8f0] rounded-lg px-3 py-2 text-sm text-[#0f172a] focus:outline-none focus:border-[#4f46e5] focus:ring-1 focus:ring-[#4f46e5]"
+                  className="w-full bg-[#f8fafc] border border-[#e2e8f0] rounded-lg px-3 py-2 text-sm text-[#0f172a] focus:outline-none focus:border-[#3d3793] focus:ring-1 focus:ring-[#3d3793]"
                 />
               </div>
               <div>
@@ -316,7 +316,7 @@ export default function RulesWeights() {
                   type="text"
                   value={form.category}
                   onChange={handleFormChange('category')}
-                  className="w-full bg-[#f8fafc] border border-[#e2e8f0] rounded-lg px-3 py-2 text-sm text-[#0f172a] focus:outline-none focus:border-[#4f46e5] focus:ring-1 focus:ring-[#4f46e5]"
+                  className="w-full bg-[#f8fafc] border border-[#e2e8f0] rounded-lg px-3 py-2 text-sm text-[#0f172a] focus:outline-none focus:border-[#3d3793] focus:ring-1 focus:ring-[#3d3793]"
                 />
               </div>
               <div>
@@ -327,7 +327,7 @@ export default function RulesWeights() {
                   max="100"
                   value={form.weight}
                   onChange={handleFormChange('weight')}
-                  className="w-full bg-[#f8fafc] border border-[#e2e8f0] rounded-lg px-3 py-2 text-sm text-[#0f172a] focus:outline-none focus:border-[#4f46e5] focus:ring-1 focus:ring-[#4f46e5]"
+                  className="w-full bg-[#f8fafc] border border-[#e2e8f0] rounded-lg px-3 py-2 text-sm text-[#0f172a] focus:outline-none focus:border-[#3d3793] focus:ring-1 focus:ring-[#3d3793]"
                 />
               </div>
             </div>
@@ -344,7 +344,7 @@ export default function RulesWeights() {
                 type="button"
                 disabled={submitting}
                 onClick={handleSubmit}
-                className="px-4 py-2 text-sm font-semibold bg-[#4f46e5] text-white rounded-lg hover:bg-[#4338ca] disabled:opacity-60"
+                className="px-4 py-2 text-sm font-semibold bg-[#3d3793] text-white rounded-lg hover:bg-[#4338ca] disabled:opacity-60"
               >
                 {submitting ? 'Saving...' : 'Save Rule'}
               </button>

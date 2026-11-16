@@ -7,6 +7,7 @@ import pool from './config/db.js';
 import { ensureWorkflowSchema } from './config/bootstrap.js';
 import usersRoutes from './routes/users.routes.js';
 import casesRoutes from './routes/cases.routes.js';
+import policiesRoutes from './routes/policies.routes.js';
 import authRoutes from './routes/auth.routes.js';
 import notificationsRoutes from './routes/notifications.routes.js';
 import evidenceRoutes from './routes/evidence.routes.js';
@@ -53,6 +54,7 @@ app.use('/api/notifications', verifyToken, notificationsRoutes);
 app.use('/api/evidence', verifyToken, evidenceRoutes);
 app.use('/api/rules', verifyToken, rulesRoutes);
 app.use('/api/chat', verifyToken, chatbotRoutes);
+app.use('/api/policies', verifyToken, policiesRoutes);
 
 async function startServer() {
   try {

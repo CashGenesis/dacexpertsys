@@ -27,6 +27,20 @@ export async function getAllUsersController(req, res) {
   }
 }
 
+// The signed-in user's own record (used by the Profile page).
+export async function getMeController(req, res) {
+  try {
+    const user = await getUserByIdService(Number(req.user?.sub));
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    return res.status(200).json(user);
+  } catch (error) {
+    console.error('Error fetching current user:', error);
+    return res.status(500).json({ error: 'Failed to fetch user' });
+  }
+}
+
 export async function getUserByIdController(req, res) {
   try {
     const userId = Number(req.params.id);
