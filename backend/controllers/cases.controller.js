@@ -4,6 +4,7 @@ import {
   approveCaseService,
   getCaseHistoryService,
   getCaseByIdService,
+  getStudentProfileService,
   updateCaseService,
   deleteCaseService,
 } from '../services/cases.service.js';
@@ -15,7 +16,9 @@ export async function getAllCasesController(req, res) {
     const roleFilter = req.query?.role ? String(req.query.role).toLowerCase() : null;
     const statusFilter = req.query?.status ? String(req.query.status).toLowerCase() : null;
 
-    if (roleFilter && requesterRole !== 'admin' && roleFilter !== requesterRole) {
+    // Wardens may narrow to the cases they created ("my_created_only").
+    const isOwnCasesFilter = requesterRole === 'warden' && roleFilter === 'my_created_only';
+    if (roleFilter && requesterRole !== 'admin' && roleFilter !== requesterRole && !isOwnCasesFilter) {
       return res.status(403).json({ error: 'Forbidden role filter' });
     }
 
@@ -38,15 +41,15 @@ export async function createCaseController(req, res) {
     const requesterRole = String(req.user?.role || '').toLowerCase();
     const requesterId = Number(req.user?.sub);
 
-    if (!['warden', 'chief_warden'].includes(requesterRole)) {
-      return res.status(403).json({ error: 'Only warden or chief warden can create cases' });
+    if (!['warden', 'chief_warden', 'dsw', 'admin'].includes(requesterRole)) {
+      return res.status(403).json({ error: 'Only staff can create cases' });
     }
 
     if (!studentId || !offenseType) {
       return res.status(400).json({ error: 'student_id and offense_type are required' });
     }
 
-    const createdCase = await createCaseService(req.body, requesterId);
+    const createdCase = await createCaseService(req.body, requesterId, requesterRole);
     return res.status(201).json(createdCase);
   } catch (error) {
     console.error('Error creating case:', error);
@@ -63,7 +66,10 @@ export async function getCaseByIdController(req, res) {
     }
 
     const caseItem = await getCaseByIdService(caseId);
-    if (!caseItem) {
+    // Students may only open their own cases.
+    const isOtherStudentsCase = String(req.user?.role || '').toLowerCase() === 'student'
+      && Number(caseItem?.student_id) !== Number(req.user?.sub);
+    if (!caseItem || isOtherStudentsCase) {
       return res.status(404).json({ error: 'Case not found' });
     }
 
@@ -71,6 +77,25 @@ export async function getCaseByIdController(req, res) {
   } catch (error) {
     console.error('Error fetching case:', error);
     return res.status(500).json({ error: 'Failed to fetch case' });
+  }
+}
+
+export async function getStudentProfileController(req, res) {
+  try {
+    const enrollmentNo = String(req.params.enrollmentNo || '').trim();
+    if (!enrollmentNo) {
+      return res.status(400).json({ error: 'A valid enrollment number is required' });
+    }
+
+    const profile = await getStudentProfileService(enrollmentNo);
+    if (!profile) {
+      return res.status(404).json({ error: 'Student not found' });
+    }
+
+    return res.status(200).json(profile);
+  } catch (error) {
+    console.error('Error fetching student profile:', error);
+    return res.status(500).json({ error: 'Failed to fetch student profile' });
   }
 }
 

@@ -17,10 +17,13 @@ export async function createCaseTimelineService({ caseId, event, performedBy }, 
 
 export async function getCaseTimelineService(caseId) {
   const query = `
-    SELECT id, case_id, event, performed_by, timestamp
-    FROM case_timeline
-    WHERE case_id = $1
-    ORDER BY timestamp ASC
+    SELECT t.id, t.case_id, t.event, t.notes, t.performed_by, t.timestamp,
+           COALESCE(t.performed_by_role, u.role) AS performed_by_role,
+           u.name AS performed_by_name
+    FROM case_timeline t
+    LEFT JOIN users u ON u.id = t.performed_by
+    WHERE t.case_id = $1
+    ORDER BY t.timestamp ASC, t.id ASC
   `;
   const result = await pool.query(query, [caseId]);
   return result.rows;

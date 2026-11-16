@@ -247,7 +247,7 @@ export default function UserManagement() {
         <button
           type="button"
           onClick={openCreateModal}
-          className="inline-flex items-center justify-center gap-2 bg-[#5c56e9] hover:bg-[#4338ca] text-white text-xs font-bold rounded-xl px-4 py-2.5 shadow-sm hover:shadow transition-all"
+          className="inline-flex items-center justify-center gap-2 bg-[#3d3793] hover:bg-[#4338ca] text-white text-xs font-bold rounded-xl px-4 py-2.5 shadow-sm hover:shadow transition-all"
         >
           <span className="material-symbols-outlined text-[18px]">person_add</span>
           Add New User
@@ -284,7 +284,7 @@ export default function UserManagement() {
                 setPage(0);
               }}
               placeholder="Search by name or email..."
-              className="w-full bg-[#f8fafc] border border-[#edf2f7] rounded-xl pl-10 pr-4 py-2 text-xs font-medium text-[#0f172a] placeholder:text-[#94a3b8] focus:outline-none focus:border-[#5c56e9] focus:ring-2 focus:ring-[#5c56e9]/20 transition-all"
+              className="w-full bg-[#f8fafc] border border-[#edf2f7] rounded-xl pl-10 pr-4 py-2 text-xs font-medium text-[#0f172a] placeholder:text-[#94a3b8] focus:outline-none focus:border-[#3d3793] focus:ring-2 focus:ring-[#3d3793]/20 transition-all"
             />
           </div>
 
@@ -298,7 +298,7 @@ export default function UserManagement() {
                 }}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                   roleFilter === opt
-                    ? 'bg-white text-[#5c56e9] shadow-xs'
+                    ? 'bg-white text-[#3d3793] shadow-xs'
                     : 'text-[#64748b] hover:text-[#0f172a]'
                 }`}
               >
@@ -311,7 +311,7 @@ export default function UserManagement() {
         {/* User Table */}
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 gap-3">
-            <div className="w-10 h-10 border-3 border-[#5c56e9] border-t-transparent rounded-full animate-spin" />
+            <div className="w-10 h-10 border-3 border-[#3d3793] border-t-transparent rounded-full animate-spin" />
             <p className="text-xs font-medium text-[#64748b]">Loading user roster...</p>
           </div>
         ) : filteredUsers.length === 0 ? (
@@ -351,7 +351,7 @@ export default function UserManagement() {
                       <tr key={user.id} className="hover:bg-[#f8fafc] transition-colors">
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
-                            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#5c56e9] to-[#3b82f6] text-white flex items-center justify-center text-xs font-bold shrink-0">
+                            <div className="w-9 h-9 rounded-xl bg-[#3d3793] text-white flex items-center justify-center text-xs font-bold shrink-0">
                               {initials}
                             </div>
                             <div className="min-w-0">
@@ -377,7 +377,7 @@ export default function UserManagement() {
                               value={user.role}
                               disabled={updatingRoleId === user.id}
                               onChange={(e) => handleRoleChange(user.id, e.target.value)}
-                              className="bg-[#f8fafc] border border-[#edf2f7] rounded-xl px-2.5 py-1.5 text-xs font-semibold text-[#334155] focus:outline-none focus:border-[#5c56e9] cursor-pointer"
+                              className="bg-[#f8fafc] border border-[#edf2f7] rounded-xl px-2.5 py-1.5 text-xs font-semibold text-[#334155] focus:outline-none focus:border-[#3d3793] cursor-pointer"
                             >
                               {ROLE_OPTIONS.map((r) => (
                                 <option key={r} value={r}>{r.replace('_', ' ').toUpperCase()}</option>
@@ -389,7 +389,7 @@ export default function UserManagement() {
                               disabled={resettingPasswordId === user.id}
                               onClick={() => handleResetPassword(user.id, user.name || 'User')}
                               title="Reset Password"
-                              className="p-1.5 rounded-xl border border-[#edf2f7] bg-[#f8fafc] hover:bg-slate-100 text-[#64748b] hover:text-[#5c56e9] transition-colors disabled:opacity-50"
+                              className="p-1.5 rounded-xl border border-[#edf2f7] bg-[#f8fafc] hover:bg-slate-100 text-[#64748b] hover:text-[#3d3793] transition-colors disabled:opacity-50"
                             >
                               <span className="material-symbols-outlined text-[16px]">lock_reset</span>
                             </button>
@@ -398,7 +398,7 @@ export default function UserManagement() {
                               type="button"
                               onClick={() => openEditModal(user)}
                               title="Edit User"
-                              className="p-1.5 rounded-xl border border-[#edf2f7] bg-[#f8fafc] hover:bg-[#5c56e9]/10 text-[#64748b] hover:text-[#5c56e9] transition-colors"
+                              className="p-1.5 rounded-xl border border-[#edf2f7] bg-[#f8fafc] hover:bg-[#3d3793]/10 text-[#64748b] hover:text-[#3d3793] transition-colors"
                             >
                               <span className="material-symbols-outlined text-[16px]">edit</span>
                             </button>
@@ -478,7 +478,7 @@ export default function UserManagement() {
                     value={form.name}
                     onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
                     placeholder="e.g. Dr. Rajesh Sharma"
-                    className="w-full bg-[#f8fafc] border border-[#e2e8f0] rounded-xl px-3.5 py-2.5 text-sm text-[#0f172a] focus:outline-none focus:border-[#5c56e9] focus:ring-2 focus:ring-[#5c56e9]/20"
+                    className="w-full bg-[#f8fafc] border border-[#e2e8f0] rounded-xl px-3.5 py-2.5 text-sm text-[#0f172a] focus:outline-none focus:border-[#3d3793] focus:ring-2 focus:ring-[#3d3793]/20"
                   />
                 </div>
                 <div>
@@ -489,7 +489,7 @@ export default function UserManagement() {
                     value={form.email}
                     onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))}
                     placeholder="e.g. rajesh.sharma@bmu.edu.in"
-                    className="w-full bg-[#f8fafc] border border-[#e2e8f0] rounded-xl px-3.5 py-2.5 text-sm text-[#0f172a] focus:outline-none focus:border-[#5c56e9] focus:ring-2 focus:ring-[#5c56e9]/20"
+                    className="w-full bg-[#f8fafc] border border-[#e2e8f0] rounded-xl px-3.5 py-2.5 text-sm text-[#0f172a] focus:outline-none focus:border-[#3d3793] focus:ring-2 focus:ring-[#3d3793]/20"
                   />
                 </div>
                 <div>
@@ -497,7 +497,7 @@ export default function UserManagement() {
                   <select
                     value={form.role}
                     onChange={(e) => setForm((prev) => ({ ...prev, role: e.target.value }))}
-                    className="w-full bg-[#f8fafc] border border-[#e2e8f0] rounded-xl px-3.5 py-2.5 text-sm text-[#0f172a] focus:outline-none focus:border-[#5c56e9] focus:ring-2 focus:ring-[#5c56e9]/20 cursor-pointer"
+                    className="w-full bg-[#f8fafc] border border-[#e2e8f0] rounded-xl px-3.5 py-2.5 text-sm text-[#0f172a] focus:outline-none focus:border-[#3d3793] focus:ring-2 focus:ring-[#3d3793]/20 cursor-pointer"
                   >
                     {ROLE_OPTIONS.map((r) => (
                       <option key={r} value={r}>{r.replace('_', ' ').toUpperCase()}</option>
@@ -511,7 +511,7 @@ export default function UserManagement() {
                     value={form.hostel}
                     onChange={(e) => setForm((prev) => ({ ...prev, hostel: e.target.value }))}
                     placeholder="e.g. Block B"
-                    className="w-full bg-[#f8fafc] border border-[#e2e8f0] rounded-xl px-3.5 py-2.5 text-sm text-[#0f172a] focus:outline-none focus:border-[#5c56e9] focus:ring-2 focus:ring-[#5c56e9]/20"
+                    className="w-full bg-[#f8fafc] border border-[#e2e8f0] rounded-xl px-3.5 py-2.5 text-sm text-[#0f172a] focus:outline-none focus:border-[#3d3793] focus:ring-2 focus:ring-[#3d3793]/20"
                   />
                 </div>
               </div>
@@ -527,7 +527,7 @@ export default function UserManagement() {
                 <button
                   type="submit"
                   disabled={savingUser}
-                  className="px-6 py-2.5 bg-[#5c56e9] hover:bg-[#4338ca] text-white text-xs font-bold rounded-xl shadow-sm transition-all disabled:opacity-50"
+                  className="px-6 py-2.5 bg-[#3d3793] hover:bg-[#4338ca] text-white text-xs font-bold rounded-xl shadow-sm transition-all disabled:opacity-50"
                 >
                   {savingUser ? 'Saving...' : userModal.mode === 'create' ? 'Create User' : 'Save Changes'}
                 </button>
@@ -552,13 +552,13 @@ export default function UserManagement() {
             </div>
 
             <div className="p-4 rounded-xl bg-[#f8fafc] border border-[#edf2f7] flex items-center justify-between">
-              <span className="font-mono text-sm font-bold text-[#5c56e9]">
+              <span className="font-mono text-sm font-bold text-[#3d3793]">
                 {tempPasswordModal.tempPassword}
               </span>
               <button
                 type="button"
                 onClick={() => navigator.clipboard.writeText(tempPasswordModal.tempPassword)}
-                className="text-xs font-bold text-[#5c56e9] hover:underline"
+                className="text-xs font-bold text-[#3d3793] hover:underline"
               >
                 Copy
               </button>
@@ -567,7 +567,7 @@ export default function UserManagement() {
             <button
               type="button"
               onClick={() => setTempPasswordModal({ open: false, userName: '', tempPassword: '' })}
-              className="w-full py-2.5 bg-[#5c56e9] text-white text-xs font-bold rounded-xl"
+              className="w-full py-2.5 bg-[#3d3793] text-white text-xs font-bold rounded-xl"
             >
               Done
             </button>

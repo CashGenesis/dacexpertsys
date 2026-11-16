@@ -1,225 +1,116 @@
-import { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import GreetingCard from '../../components/ui/GreetingCard';
-import StudentCard from '../../components/ui/StudentCard';
-import StatusBadge from '../../components/ui/StatusBadge';
-import SeverityBadge from '../../components/ui/SeverityBadge';
-import PromoAssistantCard from '../../components/ui/PromoAssistantCard';
-import EmptyState from '../../components/ui/EmptyState';
-import { getCases } from '../../services/api';
+import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
+import DACLayout from '../../components/layout/DACLayout';
+import CasesTable from '../../components/cases/CasesTable';
+import { Card, Icon } from '../../components/cases/parts';
+import { ACTIVE_STATUSES, fmtNumber, mapCase } from '../../components/cases/caseUi';
 import { useAuth } from '../../context/AuthContext';
+import { getCases, getMe } from '../../services/api';
 
-function toTitleCase(value = '') {
-  return String(value)
-    .replace(/_/g, ' ')
-    .toLowerCase()
-    .replace(/\b\w/g, (char) => char.toUpperCase());
-}
+// Total penalty points at which the DAC escalates a student's record.
+const POINTS_THRESHOLD = 100;
 
-function formatDate(value) {
-  if (!value) return 'N/A';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 'N/A';
-  return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+function greeting() {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'Good morning';
+  if (hour < 17) return 'Good afternoon';
+  return 'Good evening';
 }
 
 export default function StudentDashboard() {
-  const navigate = useNavigate();
   const { currentUser } = useAuth();
-  const hasLoggedResponseRef = useRef(false);
+  const [me, setMe] = useState(null);
   const [cases, setCases] = useState([]);
-  const [summary, setSummary] = useState({
-    totalCases: 0,
-    activeCases: 0,
-    resolvedCases: 0,
-    totalPenaltyPoints: 0,
-  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
     let mounted = true;
-
-    async function loadData() {
-      try {
-        setLoading(true);
-        setError('');
-        const casesResponse = await getCases();
-
-        if (!hasLoggedResponseRef.current) {
-          console.log('StudentDashboard API response:', { cases: casesResponse });
-          hasLoggedResponseRef.current = true;
-        }
-
-        const mappedCases = casesResponse.map((entry) => ({
-          id: entry.id,
-          token: entry.external_case_id || `#${entry.id}`,
-          offenseType: toTitleCase(entry.offense_type) || 'N/A',
-          severity: toTitleCase(entry.severity) || 'Low',
-          status: toTitleCase(entry.status) || 'Pending',
-          penaltyPoints: entry.penalty_points || 0,
-          dateReported: formatDate(entry.incident_date ?? entry.created_at),
-        }));
-
-        const totalCases = casesResponse.length;
-        const activeCases = casesResponse.filter((entry) =>
-          ['pending_chief', 'pending_dsw', 'pending_admin', 'investigation', 'pending'].includes(
-            String(entry.status || '').toLowerCase()
-          )
-        ).length;
-        const resolvedCases = casesResponse.filter(
-          (entry) => String(entry.status || '').toLowerCase() === 'resolved'
-        ).length;
-        const totalPenaltyPoints = casesResponse.reduce(
-          (sum, entry) => sum + Number(entry.penalty_points || 0),
-          0
-        );
-
-        if (mounted) {
-          setCases(mappedCases);
-          setSummary({ totalCases, activeCases, resolvedCases, totalPenaltyPoints });
-        }
-      } catch (loadError) {
-        if (mounted) {
-          setError(loadError?.message || 'Failed to fetch student records.');
-          setCases([]);
-          setSummary({ totalCases: 0, activeCases: 0, resolvedCases: 0, totalPenaltyPoints: 0 });
-        }
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    }
-
-    loadData();
+    Promise.all([getMe(), getCases()])
+      .then(([user, rows]) => {
+        if (!mounted) return;
+        setMe(user);
+        setCases(rows.map(mapCase));
+      })
+      .catch((loadError) => mounted && setError(loadError?.message || 'Failed to load your record.'))
+      .finally(() => mounted && setLoading(false));
     return () => {
       mounted = false;
     };
   }, []);
 
+  const counts = useMemo(
+    () => ({
+      total: cases.length,
+      active: cases.filter((c) => ACTIVE_STATUSES.includes(c.status)).length,
+      resolved: cases.filter((c) => c.status === 'resolved').length,
+    }),
+    [cases]
+  );
+
+  const points = Number(me?.total_points || 0);
+  const pct = Math.min(100, (points / POINTS_THRESHOLD) * 100);
+  const tone =
+    points >= POINTS_THRESHOLD
+      ? { bar: 'bg-rose-500', text: 'text-[#9f1d35]', note: 'You have reached the escalation threshold. Your record is under DAC review.' }
+      : points >= POINTS_THRESHOLD / 2
+        ? { bar: 'bg-amber-500', text: 'text-[#9a5b16]', note: `${POINTS_THRESHOLD - points} points left before escalation.` }
+        : { bar: 'bg-emerald-500', text: 'text-[#2f7a4d]', note: `${POINTS_THRESHOLD - points} points left before escalation.` };
+
+  const firstName = (me?.name || currentUser?.name || '').split(' ')[0];
+
+  const countCards = [
+    { label: 'My cases', value: counts.total, icon: 'folder_open', card: 'bg-[#eeedfa] border-[#e0ddf6]', chip: 'bg-[#dcd9f5] text-[#4b44b5]' },
+    { label: 'Active', value: counts.active, icon: 'schedule', card: 'bg-[#fbf1e5] border-[#f2e1cc]', chip: 'bg-[#f4dfc4] text-[#9a5b16]' },
+    { label: 'Resolved', value: counts.resolved, icon: 'check', card: 'bg-[#eaf4ee] border-[#d5e9dc]', chip: 'bg-[#d2e8da] text-[#2f7a4d]' },
+  ];
+
   return (
-    <div className="space-y-6 sm:space-y-8 select-none">
-      
-      {/* ── ROW 1: Greeting & Profile Summary ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
-        <div className="lg:col-span-5 flex flex-col justify-center">
-          <GreetingCard
-            role="Student"
-            name={currentUser?.name}
-            subtitle="Transparent access to your institutional disciplinary status, inquiry records, and committee policies."
-            activeCount={summary.activeCases}
-            totalCount={summary.totalCases}
-          />
+    <DACLayout>
+      <div className="max-w-[1400px] mx-auto space-y-6">
+        <div className="border-l-4 border-[#3d3793] pl-4">
+          <h1 className="text-2xl sm:text-[28px] text-slate-900 tracking-tight">
+            {greeting()}{firstName ? ', ' : ''}<span className="font-semibold">{firstName}</span>
+          </h1>
+          <p className="text-sm text-slate-500 mt-1">Your disciplinary record and penalty points.</p>
         </div>
 
-        {/* Student Profile Card */}
-        <div className="lg:col-span-7">
-          <StudentCard
-            student={currentUser}
-            previousPoints={summary.totalPenaltyPoints}
-            caseCount={summary.totalCases}
-          />
-        </div>
-      </div>
+        {error && <p className="text-sm text-rose-700 bg-rose-50 border border-rose-100 rounded-xl px-4 py-3">{error}</p>}
 
-      {/* ── Fair Hearing Guidance Banner ── */}
-      <div className="p-5 rounded-[26px] bg-gradient-to-r from-purple-50 via-indigo-50/50 to-white border border-purple-100 flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-2xl bg-[#5c54eb] text-white flex items-center justify-center shrink-0 shadow-xs">
-            <span className="material-symbols-outlined text-[20px]">balance</span>
-          </div>
-          <div>
-            <h4 className="text-xs sm:text-sm font-extrabold text-[#1e1b4b]">
-              Student Rights &amp; Fair Hearing Guarantee
-            </h4>
-            <p className="text-xs text-slate-500 font-medium">
-              Every student is entitled to present evidence and appeal committee decisions under University DAC Code.
-            </p>
-          </div>
-        </div>
-
-        <Link
-          to="/student/disciplinary-policy"
-          className="px-4 py-2 rounded-full bg-white hover:bg-slate-50 text-[#5c54eb] text-xs font-bold border border-purple-200 transition-colors shrink-0 shadow-xs"
-        >
-          View Full Policy &rarr;
-        </Link>
-      </div>
-
-      {/* ── ROW 2: Case Records & Assistant ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
-        {/* Cases Table / Card */}
-        <div className="lg:col-span-8 bg-white rounded-[28px] p-6 border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.03)] flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="text-base font-extrabold text-[#1e1b4b]">
-                  My Disciplinary Inquiries
-                </h3>
-                <p className="text-xs text-slate-400 font-medium mt-0.5">
-                  Chronological record of reported campus incidents
-                </p>
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+          <Card title="Penalty Points" icon="speed" className="xl:col-span-5">
+            <div className="px-6 pb-6">
+              <p className="text-4xl font-semibold text-slate-900 tabular-nums">
+                {loading ? '–' : fmtNumber(points)}
+                <span className="text-base font-normal text-slate-500"> / {POINTS_THRESHOLD}</span>
+              </p>
+              <div className="mt-4 h-2.5 rounded-full bg-slate-100 overflow-hidden" role="meter" aria-valuenow={points} aria-valuemin={0} aria-valuemax={POINTS_THRESHOLD}>
+                <div className={`h-full rounded-full ${tone.bar}`} style={{ width: `${loading ? 0 : pct}%` }} />
               </div>
-              <span className="px-3 py-1 rounded-full bg-slate-100 text-slate-600 text-xs font-bold">
-                {cases.length} Records
-              </span>
+              {!loading && <p className={`mt-3 text-sm ${tone.text}`}>{tone.note}</p>}
+              <Link to="/student/disciplinary-policy" className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-[#3d3793] hover:underline">
+                How points work <Icon name="arrow_forward" className="text-[18px]" />
+              </Link>
             </div>
+          </Card>
 
-            {cases.length === 0 ? (
-              <EmptyState
-                icon="verified"
-                title="Clean Disciplinary Record"
-                description="You currently have zero active or past disciplinary inquiries on file."
-              />
-            ) : (
-              <div className="space-y-3">
-                {cases.map((c) => (
-                  <div
-                    key={c.id}
-                    className="p-4 rounded-2xl bg-slate-50/70 hover:bg-white border border-slate-100 hover:border-purple-100 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 group"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="h-9 w-9 rounded-xl bg-purple-50 text-[#5c54eb] flex items-center justify-center font-bold text-xs shrink-0">
-                        #
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-black text-[#1e1b4b]">
-                            {c.token}
-                          </span>
-                          <span className="text-xs font-bold text-slate-600">
-                            · {c.offenseType}
-                          </span>
-                        </div>
-                        <p className="text-[11px] text-slate-400 font-medium">
-                          Reported on {c.dateReported} · Points: {c.penaltyPoints}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
-                      <StatusBadge status={c.status} />
-                      <SeverityBadge severity={c.severity} />
-                      <Link
-                        to={`/student/cases/${c.token}`}
-                        className="px-3 py-1.5 rounded-xl bg-white hover:bg-[#5c54eb] text-slate-600 hover:text-white border border-slate-200 text-xs font-bold transition-all shadow-xs"
-                      >
-                        Details
-                      </Link>
-                    </div>
-                  </div>
-                ))}
+          <div className="xl:col-span-7 grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {countCards.map((item) => (
+              <div key={item.label} className={`rounded-2xl border px-5 py-6 flex items-center gap-4 ${item.card}`}>
+                <span className={`h-11 w-11 shrink-0 rounded-full flex items-center justify-center ${item.chip}`}>
+                  <Icon name={item.icon} className="text-[24px]" />
+                </span>
+                <span>
+                  <span className="block text-sm font-semibold text-slate-800">{item.label}</span>
+                  <span className="block text-3xl font-semibold text-slate-900 tabular-nums">{loading ? '–' : fmtNumber(item.value)}</span>
+                </span>
               </div>
-            )}
+            ))}
           </div>
         </div>
 
-        {/* AI Assistant Card */}
-        <div className="lg:col-span-4">
-          <PromoAssistantCard />
-        </div>
+        <CasesTable cases={cases} loading={loading} role="student" title="My Cases" pageSize={5} showStudent={false} />
       </div>
-
-    </div>
+    </DACLayout>
   );
 }

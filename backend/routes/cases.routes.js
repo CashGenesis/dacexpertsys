@@ -11,6 +11,7 @@ import {
   deleteCaseController,
   approveCaseController,
   getCaseHistoryController,
+  getStudentProfileController,
 } from '../controllers/cases.controller.js';
 import { studentHistoryController } from '../controllers/chatbot.controller.js';
 import { uploadEvidenceController } from '../controllers/evidence.controller.js';
@@ -55,15 +56,16 @@ const upload = multer({
 router.get('/', getAllCasesController);
 router.get('/history', getCaseHistoryController);
 router.get('/student/:enrollmentNo', requireRoles('warden', 'chief_warden', 'dsw', 'admin'), studentHistoryController);
+router.get('/student/:enrollmentNo/profile', requireRoles('warden', 'chief_warden', 'dsw', 'admin'), getStudentProfileController);
 router.get('/:id/timeline', getCaseTimelineController);
 router.post('/:id/timeline', requireRoles('admin'), createCaseTimelineController);
 router.put('/:id/timeline/:timelineId', requireRoles('admin'), updateCaseTimelineController);
 router.delete('/:id/timeline/:timelineId', requireRoles('admin'), deleteCaseTimelineController);
-router.post('/upload-evidence', upload.single('file'), uploadEvidenceController);
-router.post('/', createCaseController);
+router.post('/upload-evidence', requireRoles('warden', 'chief_warden', 'dsw', 'admin'), upload.single('file'), uploadEvidenceController);
+router.post('/', requireRoles('warden', 'chief_warden', 'dsw', 'admin'), createCaseController);
 router.get('/:id', getCaseByIdController);
-router.put('/:id', updateCaseController);
+router.put('/:id', requireRoles('warden', 'chief_warden', 'dsw', 'admin'), updateCaseController);
 router.delete('/:id', requireRoles('admin'), deleteCaseController);
-router.put('/:id/approve', approveCaseController);
+router.put('/:id/approve', requireRoles('chief_warden', 'dsw', 'admin'), approveCaseController);
 
 export default router;

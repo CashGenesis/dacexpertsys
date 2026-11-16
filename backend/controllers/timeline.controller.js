@@ -4,12 +4,21 @@ import {
   updateCaseTimelineService,
   deleteCaseTimelineService,
 } from '../services/timeline.service.js';
+import { getCaseByIdService } from '../services/cases.service.js';
 
 export async function getCaseTimelineController(req, res) {
   try {
     const caseId = Number(req.params.id);
     if (!caseId) {
       return res.status(400).json({ error: 'A valid case id is required' });
+    }
+
+    // Students may only see the timeline of their own cases.
+    if (String(req.user?.role || '').toLowerCase() === 'student') {
+      const caseItem = await getCaseByIdService(caseId);
+      if (!caseItem || Number(caseItem.student_id) !== Number(req.user?.sub)) {
+        return res.status(404).json({ error: 'Case not found' });
+      }
     }
 
     const timeline = await getCaseTimelineService(caseId);

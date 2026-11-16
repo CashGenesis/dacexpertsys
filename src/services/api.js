@@ -98,6 +98,10 @@ export async function getCaseById(caseId) {
   return fetchJson(`/api/cases/${caseId}`);
 }
 
+export async function getStudentProfile(enrollmentNo) {
+  return fetchJson(`/api/cases/student/${encodeURIComponent(enrollmentNo)}/profile`);
+}
+
 export async function updateCase(caseId, payload) {
   return fetchJson(`/api/cases/${caseId}`, {
     method: 'PUT',
@@ -310,4 +314,12 @@ export async function deleteUser(userId) {
   return fetchJson(`/api/users/${userId}`, {
     method: 'DELETE',
   });
+}
+
+export async function getMe() {
+  return fetchJson('/api/users/me');
+}
+
+export async function getPolicies() {
+  return fetchJson('/api/policies');
 }

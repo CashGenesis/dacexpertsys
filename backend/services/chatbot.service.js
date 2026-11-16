@@ -346,10 +346,32 @@ export async function answerChatbotQuestion(user, rawMessage, conversationId = n
     throw new Error('Please enter a question.');
   }
 
+  // Conversation memory is per user, so one user's follow-ups never reuse another user's context.
+  const convoKey = conversationId ? `${user?.sub ?? 'anon'}:${conversationId}` : null;
+
   // 1. Conversation State & Query Routing
-  const convoState = getConversationState(conversationId);
+  const convoState = getConversationState(convoKey);
   const route = routeQuery(text, convoState);
   const { intent, filters, showCases } = route;
+
+  // Students may only ask about their own record. Other students' records, names and
+  // aggregate statistics are never looked up for them.
+  const isStudentUser = String(user?.role || '').toLowerCase() === 'student';
+  if (isStudentUser) {
+    const ownRes = await pool.query("SELECT enrollment_no FROM users WHERE id = $1 AND role = 'student'", [Number(user.sub)]);
+    const ownEnrollmentNo = ownRes.rows[0]?.enrollment_no || null;
+    const asksAboutOther = (filters.enrollment_no && filters.enrollment_no !== ownEnrollmentNo) || filters.student_name;
+    if (asksAboutOther) {
+      return {
+        answer: 'You can only view your own DAC records. Ask about your own enrollment number or your cases.',
+        intent,
+        showCases: false,
+        cases: [],
+        sources: [],
+        suggestedQuestions: generateDynamicSuggestions(intent, {}),
+      };
+    }
+  }
 
   // 2. Structured Retrieval (PostgreSQL)
   let structuredContext = '';
@@ -401,6 +423,7 @@ export async function answerChatbotQuestion(user, rawMessage, conversationId = n
         id: `student-${studentRecord.enrollment_no}`,
         title: `Student Record: ${studentRecord.name} (${studentRecord.enrollment_no})`,
         document_type: 'student_record',
+        student_enrollment: studentRecord.enrollment_no,
       });
     } else if (filters.enrollment_no) {
       structuredContext += `\n[DATABASE: Student Search]\nNo student found with enrollment number ${filters.enrollment_no}.\n`;
@@ -414,8 +437,8 @@ export async function answerChatbotQuestion(user, rawMessage, conversationId = n
       `SELECT c.*, u.name AS student_name, u.enrollment_no, u.hostel, u.room
        FROM cases c
        JOIN users u ON u.id = c.student_id
-       WHERE c.external_case_id = $1`,
-      [filters.case_id]
+       WHERE c.external_case_id = $1${isStudentUser ? ' AND c.student_id = $2' : ''}`,
+      isStudentUser ? [filters.case_id, Number(user.sub)] : [filters.case_id]
     );
     caseDetailRecord = cRes.rows[0];
 
@@ -455,7 +478,8 @@ export async function answerChatbotQuestion(user, rawMessage, conversationId = n
 
   // C. Count Queries
   let countResult = null;
-  if (intent === 'count') {
+  // Count queries aggregate across all students, so they are staff-only.
+  if (intent === 'count' && !isStudentUser) {
     countResult = await handleCountQuery(user, text, filters);
     structuredContext += `\n[DATABASE: Count Query Result]\n${countResult.summary}\n`;
     structuredSummary = `Count: ${countResult.count}`;
@@ -497,6 +521,20 @@ export async function answerChatbotQuestion(user, rawMessage, conversationId = n
         section: doc.metadata?.section || null,
         case_id: doc.metadata?.case_id || null,
       });
+    }
+  }
+
+  // Sources hold the external case reference (e.g. DAC-2026-03412), but the case
+  // routes expect the numeric primary key. Resolve it once for all case sources.
+  const unresolvedCaseRefs = [...new Set(sources.filter((s) => s.case_id && s.db_id == null).map((s) => s.case_id))];
+  if (unresolvedCaseRefs.length > 0) {
+    const caseIdRes = await pool.query(
+      'SELECT id, external_case_id FROM cases WHERE external_case_id = ANY($1)',
+      [unresolvedCaseRefs]
+    );
+    const dbIdByRef = new Map(caseIdRes.rows.map((r) => [r.external_case_id, r.id]));
+    for (const s of sources) {
+      if (s.case_id && s.db_id == null) s.db_id = dbIdByRef.get(s.case_id) ?? null;
     }
   }
 
@@ -547,7 +585,7 @@ ${structuredContext || 'No specific structured records queried.'}
   const activeEnrollment = studentRecord?.enrollment_no || filters.enrollment_no || convoState.lastEnrollmentNo;
   const activeCaseId = caseDetailRecord?.external_case_id || filters.case_id || convoState.lastCaseId;
 
-  updateConversationState(conversationId, text, answer, {
+  updateConversationState(convoKey, text, answer, {
     enrollmentNo: activeEnrollment,
     caseId: activeCaseId,
     intent,

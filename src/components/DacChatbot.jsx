@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { askChatbot } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { OPEN_ASSISTANT_EVENT } from '../lib/assistant';
+import StudentProfileLink from './cases/StudentProfileLink';
 
 const DEFAULT_SUGGESTIONS = [
   'What are the DAC points for weed?',
@@ -45,7 +47,8 @@ function CaseCard({ item, role, navigate }) {
         <p><span className="text-[#94a3b8] font-medium">Date:</span> {dateStr}</p>
       </div>
 
-      <div className="mt-2.5 pt-2 border-t border-[#edf2f7] flex justify-end">
+      <div className="mt-2.5 pt-2 border-t border-[#edf2f7] flex items-center justify-between gap-2">
+        <StudentProfileLink enrollment={item.enrollment_no} />
         <button
           type="button"
           onClick={() => navigate(casePath(role, item.id))}
@@ -73,10 +76,11 @@ function SourceCitations({ sources, role, navigate }) {
             <span className="truncate pr-2 text-xs">
               • {src.title || src.id} {src.section ? `(${src.section})` : ''}
             </span>
-            {src.case_id && (
+            {src.student_enrollment && <StudentProfileLink enrollment={src.student_enrollment} className="shrink-0 mr-2" />}
+            {src.db_id != null && (
               <button
                 type="button"
-                onClick={() => navigate(casePath(role, src.case_id))}
+                onClick={() => navigate(casePath(role, src.db_id))}
                 className="shrink-0 text-[10px] font-bold text-[#5c56e9] hover:underline"
               >
                 View
@@ -89,9 +93,9 @@ function SourceCitations({ sources, role, navigate }) {
   );
 }
 
+
 export default function DacChatbot() {
   const { role, isAuthenticated } = useAuth();
-  const location = useLocation();
   const navigate = useNavigate();
 
   const [open, setOpen] = useState(false);
@@ -105,7 +109,8 @@ export default function DacChatbot() {
   const messagesScrollRef = useRef(null);
   const textareaRef = useRef(null);
 
-  const visible = isAuthenticated && ['warden', 'chief_warden', 'dsw', 'admin'].includes(role) && /dashboard/.test(location.pathname);
+  // Opened from the "Ask AI" button in the app top bar (staff only).
+  const visible = isAuthenticated && ['warden', 'chief_warden', 'dsw', 'admin'].includes(role);
 
   // Initialize conversation ID when opened
   useEffect(() => {
@@ -120,6 +125,13 @@ export default function DacChatbot() {
       endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
     }
   }, [messages, loading, view]);
+
+  // Top-bar "Ask AI" buttons toggle the panel through a window event.
+  useEffect(() => {
+    const toggle = () => setOpen((val) => !val);
+    window.addEventListener(OPEN_ASSISTANT_EVENT, toggle);
+    return () => window.removeEventListener(OPEN_ASSISTANT_EVENT, toggle);
+  }, []);
 
   if (!visible) return null;
 
@@ -168,7 +180,7 @@ export default function DacChatbot() {
   const isConversation = view === 'conversation';
 
   return (
-    <div className="fixed bottom-6 right-6 z-[60] font-sans">
+    <div className="fixed right-6 top-20 z-[60] font-sans">
       {open && (
         <section
           aria-label="DAC Assistant Chat Panel"
@@ -356,18 +368,6 @@ export default function DacChatbot() {
         </section>
       )}
 
-      {/* Floating Action Toggle Button */}
-      <button
-        id="dac-chatbot-launcher"
-        type="button"
-        onClick={() => setOpen((val) => !val)}
-        className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#5c54eb] text-white shadow-xl shadow-purple-500/35 transition-all hover:scale-105 active:scale-95"
-        aria-label="Toggle DAC AI assistant"
-      >
-        <span className="material-symbols-outlined text-[26px]">
-          {open ? 'close' : 'auto_awesome'}
-        </span>
-      </button>
     </div>
   );
 }

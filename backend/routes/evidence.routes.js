@@ -9,8 +9,8 @@ import { requireRoles } from '../middleware/auth.middleware.js';
 
 const router = Router();
 
-router.get('/', getEvidenceController);
-router.get('/:id', getEvidenceByIdController);
+router.get('/', requireRoles('warden', 'chief_warden', 'dsw', 'admin'), getEvidenceController);
+router.get('/:id', requireRoles('warden', 'chief_warden', 'dsw', 'admin'), getEvidenceByIdController);
 router.put('/:id', requireRoles('admin'), updateEvidenceController);
 router.delete('/:id', requireRoles('admin'), deleteEvidenceController);
 
