@@ -500,6 +500,20 @@ export async function answerChatbotQuestion(user, rawMessage, conversationId = n
     }
   }
 
+  // Sources hold the external case reference (e.g. DAC-2026-03412), but the case
+  // routes expect the numeric primary key. Resolve it once for all case sources.
+  const unresolvedCaseRefs = [...new Set(sources.filter((s) => s.case_id && s.db_id == null).map((s) => s.case_id))];
+  if (unresolvedCaseRefs.length > 0) {
+    const caseIdRes = await pool.query(
+      'SELECT id, external_case_id FROM cases WHERE external_case_id = ANY($1)',
+      [unresolvedCaseRefs]
+    );
+    const dbIdByRef = new Map(caseIdRes.rows.map((r) => [r.external_case_id, r.id]));
+    for (const s of sources) {
+      if (s.case_id && s.db_id == null) s.db_id = dbIdByRef.get(s.case_id) ?? null;
+    }
+  }
+
   // 4. Development Logging (Requirement 18)
   console.log('[DAC RAG] intent:', intent);
   console.log('[DAC RAG] query:', text);

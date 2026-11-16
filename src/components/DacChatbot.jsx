@@ -74,10 +74,10 @@ function SourceCitations({ sources, role, navigate }) {
             <span className="truncate pr-2 text-xs">
               • {src.title || src.id} {src.section ? `(${src.section})` : ''}
             </span>
-            {src.case_id && (
+            {src.db_id != null && (
               <button
                 type="button"
-                onClick={() => navigate(casePath(role, src.case_id))}
+                onClick={() => navigate(casePath(role, src.db_id))}
                 className="shrink-0 text-[10px] font-bold text-[#5c56e9] hover:underline"
               >
                 View
