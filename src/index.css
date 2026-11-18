@@ -45,4 +45,6 @@ html {
 
 body {
   overflow-x: hidden;
+  /* Same as the DACLayout page background, so nothing flashes white between pages. */
+  background-color: #f6f6fa;
 }
