@@ -1,25 +1,29 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import './index.css';
 import { useAuth } from './context/AuthContext';
 import { useLenis } from './hooks/useLenis';
 import Login from './Login.jsx';
-import Dashboard from './pages/Dashboard.jsx';
-import Reports from './pages/Reports.jsx';
-import AdminSettings from './pages/AdminSettings.jsx';
-import RulesWeights from './pages/admin/RulesWeights.jsx';
-import UserManagement from './pages/admin/UserManagement.jsx';
-import SystemConfig from './pages/admin/SystemConfig.jsx';
-import CaseDetail from './pages/CaseDetail.jsx';
-import CaseList from './pages/CaseList.jsx';
-import Notifications from './pages/Notifications.jsx';
-import Profile from './pages/Profile.jsx';
-import RegisterCase from './pages/warden/RegisterCase.jsx';
-import StudentDashboard from './pages/student/StudentDashboard.jsx';
-import StudentPolicy from './pages/student/StudentPolicy.jsx';
-import StudentProfile from './pages/StudentProfile.jsx';
-import Settings from './pages/Settings.jsx';
 import DacChatbot from './components/DacChatbot.jsx';
+
+// Pages load on first visit, so the login screen does not wait for every page's code.
+const Dashboard = lazy(() => import('./pages/Dashboard.jsx'));
+const Reports = lazy(() => import('./pages/Reports.jsx'));
+const AdminSettings = lazy(() => import('./pages/AdminSettings.jsx'));
+const RulesWeights = lazy(() => import('./pages/admin/RulesWeights.jsx'));
+const UserManagement = lazy(() => import('./pages/admin/UserManagement.jsx'));
+const SystemConfig = lazy(() => import('./pages/admin/SystemConfig.jsx'));
+const EmailTest = lazy(() => import('./pages/admin/EmailTest.jsx'));
+const CaseDetail = lazy(() => import('./pages/CaseDetail.jsx'));
+const CaseList = lazy(() => import('./pages/CaseList.jsx'));
+const Notifications = lazy(() => import('./pages/Notifications.jsx'));
+const Profile = lazy(() => import('./pages/Profile.jsx'));
+const RegisterCase = lazy(() => import('./pages/warden/RegisterCase.jsx'));
+const StudentDashboard = lazy(() => import('./pages/student/StudentDashboard.jsx'));
+const StudentPolicy = lazy(() => import('./pages/student/StudentPolicy.jsx'));
+const StudentProfile = lazy(() => import('./pages/StudentProfile.jsx'));
+const Settings = lazy(() => import('./pages/Settings.jsx'));
 
 function ProtectedRoute({ children, roles }) {
   const { currentUser, loading, isAuthenticated, role } = useAuth();
@@ -41,7 +45,8 @@ function AnimatedRoutes() {
 
   return (
     <AnimatePresence mode="wait">
-      <Routes location={location} key={location.pathname}>
+      <Suspense fallback={null} key={location.pathname}>
+      <Routes location={location}>
         {/* Public */}
         <Route path="/" element={<Login />} />
 
@@ -54,7 +59,6 @@ function AnimatedRoutes() {
         {/* Admin & DSW */}
         <Route path="/dashboard" element={<ProtectedRoute roles={['admin', 'dsw']}><Dashboard /></ProtectedRoute>} />
         <Route path="/dsw-dashboard" element={<ProtectedRoute roles={['dsw']}><Dashboard /></ProtectedRoute>} />
-        <Route path="/register-case" element={<ProtectedRoute roles={['dsw', 'admin']}><RegisterCase /></ProtectedRoute>} />
         <Route path="/reports" element={<ProtectedRoute roles={['admin', 'dsw']}><Reports /></ProtectedRoute>} />
         <Route path="/cases/:id" element={<ProtectedRoute roles={['admin', 'dsw']}><CaseDetail /></ProtectedRoute>} />
         <Route path="/view-case/:id" element={<ProtectedRoute roles={['admin', 'dsw']}><CaseDetail /></ProtectedRoute>} />
@@ -91,13 +95,16 @@ function AnimatedRoutes() {
         {/* Admin settings — nested inside one shell */}
         <Route path="/admin-settings" element={<ProtectedRoute roles={['admin']}><AdminSettings /></ProtectedRoute>}>
           <Route index element={<Navigate to="rules-weights" replace />} />
-          <Route path="rules-weights" element={<RulesWeights />} />
+          {/* "Rules & Policies" shows the official policy; "System Config" manages rules and weights. */}
+          <Route path="rules-weights" element={<SystemConfig />} />
           <Route path="users" element={<UserManagement />} />
-          <Route path="system" element={<SystemConfig />} />
+          <Route path="system" element={<RulesWeights />} />
+          <Route path="email-test" element={<EmailTest />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </Suspense>
     </AnimatePresence>
   );
 }

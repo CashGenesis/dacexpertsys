@@ -5,7 +5,7 @@ import CasesTable from '../../components/cases/CasesTable';
 import { Card, Icon } from '../../components/cases/parts';
 import { ACTIVE_STATUSES, fmtNumber, mapCase } from '../../components/cases/caseUi';
 import { useAuth } from '../../context/AuthContext';
-import { getCases, getMe } from '../../services/api';
+import { getCases, getMe, getMyMeetings } from '../../services/api';
 
 // Total penalty points at which the DAC escalates a student's record.
 const POINTS_THRESHOLD = 100;
@@ -21,16 +21,20 @@ export default function StudentDashboard() {
   const { currentUser } = useAuth();
   const [me, setMe] = useState(null);
   const [cases, setCases] = useState([]);
+  const [meetings, setMeetings] = useState([]);
+  // Captured once per load: splits meetings into upcoming and past.
+  const [now] = useState(() => Date.now());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
     let mounted = true;
-    Promise.all([getMe(), getCases()])
-      .then(([user, rows]) => {
+    Promise.all([getMe(), getCases(), getMyMeetings().catch(() => [])])
+      .then(([user, rows, myMeetings]) => {
         if (!mounted) return;
         setMe(user);
         setCases(rows.map(mapCase));
+        setMeetings(Array.isArray(myMeetings) ? myMeetings : []);
       })
       .catch((loadError) => mounted && setError(loadError?.message || 'Failed to load your record.'))
       .finally(() => mounted && setLoading(false));
@@ -74,6 +78,37 @@ export default function StudentDashboard() {
           </h1>
           <p className="text-sm text-slate-500 mt-1">Your disciplinary record and penalty points.</p>
         </div>
+
+        {meetings.some((m) => new Date(m.scheduled_at).getTime() >= now) && (
+          <Card title="DAC Meeting" icon="event">
+            <div className="px-6 pb-6 space-y-3">
+              <p className="text-sm text-slate-600">
+                The Disciplinary Action Committee has called you for an in-person meeting. Attendance is required; the details were also emailed to you.
+              </p>
+              <ul className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {meetings
+                  .filter((m) => new Date(m.scheduled_at).getTime() >= now)
+                  .map((m) => (
+                    <li key={m.id} className="rounded-xl border border-[#d9d6f3] bg-[#f6f5fd] px-4 py-3">
+                      <p className="text-base font-semibold text-slate-900">
+                        {new Date(m.scheduled_at).toLocaleString('en-IN', {
+                          weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true,
+                        })}
+                      </p>
+                      <p className="text-sm text-slate-700 mt-0.5">{m.location}</p>
+                      <p className="text-xs text-slate-500 mt-1">
+                        Case {m.external_case_id || `#${m.case_id}`}{m.offense_type ? ` · ${m.offense_type}` : ''}
+                      </p>
+                      {m.notes && <p className="text-sm text-slate-700 mt-2">{m.notes}</p>}
+                      <Link to={`/student/cases/${m.case_id}`} className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-[#3d3793] hover:underline">
+                        View case <Icon name="arrow_forward" className="text-[18px]" />
+                      </Link>
+                    </li>
+                  ))}
+              </ul>
+            </div>
+          </Card>
+        )}
 
         {error && <p className="text-sm text-rose-700 bg-rose-50 border border-rose-100 rounded-xl px-4 py-3">{error}</p>}
 

@@ -5,7 +5,7 @@ import DACLayout from '../../components/layout/DACLayout';
 import { useAuth } from '../../context/AuthContext';
 import StudentCard from '../../components/ui/StudentCard';
 import StatusBadge from '../../components/ui/StatusBadge';
-import { createCase, getUsers, getStudentHistory, uploadEvidence } from '../../services/api';
+import { createCase, createGroupCases, getStudentHistory, translateHindiToEnglish, uploadEvidence } from '../../services/api';
 
 const offenseOptions = [
   'Plagiarism', 'Vandalism', 'Exam Malpractice', 'Attendance',
@@ -15,15 +15,26 @@ const offenseOptions = [
 const STEPS = ['Student Info', 'Incident Details', 'Evidence', 'Review', 'Submit'];
 
 function ProgressBar({ steps, currentStep }) {
+  // Steps sit in equal-width columns, so each circle's centre is at (i + 0.5) / n of the
+  // width. The lines run from the first centre to the last, at the circles' vertical
+  // centre (18px = half of the 36px circle), not the centre of circle + label.
+  const count = steps.length;
+  const edge = 50 / count; // % from each side to the first / last circle centre
+  const span = 100 - 2 * edge; // % between first and last circle centres
+  const progress = count > 1 ? Math.min(currentStep, count - 1) / (count - 1) : 0;
+
   return (
     <div className="w-full bg-white rounded-2xl border border-[#edf2f7] p-5 shadow-xs">
-      <div className="flex items-center justify-between relative">
+      <div className="relative grid" style={{ gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))` }}>
         {/* Background track line */}
-        <div className="absolute top-1/2 left-8 right-8 -translate-y-1/2 h-0.5 bg-[#edf2f7] z-0" />
+        <div
+          className="absolute top-[18px] -translate-y-1/2 h-0.5 bg-[#edf2f7] z-0"
+          style={{ left: `${edge}%`, right: `${edge}%` }}
+        />
         {/* Active progress fill line */}
         <div
-          className="absolute top-1/2 left-8 -translate-y-1/2 h-0.5 bg-[#3d3793] z-0 transition-all duration-500 ease-in-out"
-          style={{ width: `${(currentStep / (steps.length - 1)) * 84}%` }}
+          className="absolute top-[18px] -translate-y-1/2 h-0.5 bg-[#3d3793] z-0 transition-all duration-500 ease-in-out"
+          style={{ left: `${edge}%`, width: `${progress * span}%` }}
         />
 
         {steps.map((step, idx) => {
@@ -31,7 +42,7 @@ function ProgressBar({ steps, currentStep }) {
           const isCurrent = idx === currentStep;
 
           return (
-            <div key={step} className="flex flex-col items-center relative z-10">
+            <div key={step} className="flex flex-col items-center text-center relative z-10">
               <div
                 className={`w-9 h-9 rounded-xl flex items-center justify-center text-xs font-bold transition-all duration-300 ${
                   isDone
@@ -48,7 +59,7 @@ function ProgressBar({ steps, currentStep }) {
                 )}
               </div>
               <span
-                className={`mt-2 text-xs font-semibold whitespace-nowrap transition-colors ${
+                className={`mt-2 text-[11px] sm:text-xs font-semibold leading-tight transition-colors ${
                   isCurrent ? 'text-[#3d3793]' : isDone ? 'text-[#0f172a]' : 'text-[#94a3b8]'
                 }`}
               >
@@ -255,6 +266,138 @@ function StepStudentInfo({
   );
 }
 
+// Switch between registering one student and a group incident.
+function IncidentModeToggle({ mode, onChange }) {
+  const options = [
+    { key: 'single', icon: 'person', label: 'Single student', hint: 'One case for one student' },
+    { key: 'group', icon: 'groups', label: 'Group incident', hint: 'Several students, one separate case each' },
+  ];
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" role="radiogroup" aria-label="Incident type">
+      {options.map((o) => {
+        const active = mode === o.key;
+        return (
+          <button
+            key={o.key}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            onClick={() => onChange(o.key)}
+            className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-left transition-colors ${
+              active ? 'border-[#3d3793] bg-[#3d3793]/5 ring-2 ring-[#3d3793]/20' : 'border-slate-200 bg-white hover:bg-slate-50'
+            }`}
+          >
+            <span className={`h-9 w-9 shrink-0 rounded-lg flex items-center justify-center ${active ? 'bg-[#3d3793] text-white' : 'bg-slate-100 text-slate-500'}`}>
+              <span className="material-symbols-outlined text-[20px]">{o.icon}</span>
+            </span>
+            <span>
+              <span className={`block text-sm font-semibold ${active ? 'text-[#3d3793]' : 'text-slate-800'}`}>{o.label}</span>
+              <span className="block text-xs text-slate-500">{o.hint}</span>
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// Group incident: add students one by one by enrollment number.
+function StepGroupStudents({ students, input, onInputChange, onAdd, onRemove, lookup, error }) {
+  return (
+    <div className="flex flex-col gap-5">
+      <div className="flex items-center gap-2.5 pb-3 border-b border-[#edf2f7]">
+        <div className="w-8 h-8 rounded-xl bg-[#3d3793]/10 text-[#3d3793] flex items-center justify-center font-bold">
+          <span className="material-symbols-outlined text-[18px]">groups</span>
+        </div>
+        <div>
+          <h2 className="text-[#0f172a] font-bold text-base leading-tight">Students Involved</h2>
+          <p className="text-[#94a3b8] text-xs">
+            Add every student involved. Each student gets a separate case with the same incident details.
+          </p>
+        </div>
+      </div>
+
+      <Field label="Add student by enrollment number *">
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={input}
+            onChange={(e) => onInputChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                onAdd();
+              }
+            }}
+            data-field="groupStudents"
+            placeholder="e.g. 240123, then press Enter"
+            className={`${inputCls} flex-1 ${error ? 'border-red-500' : ''}`}
+          />
+          <button
+            type="button"
+            onClick={onAdd}
+            disabled={lookup.loading || !input.trim()}
+            className="shrink-0 inline-flex items-center gap-1.5 px-4 rounded-xl bg-[#3d3793] hover:bg-indigo-700 text-white text-xs font-bold disabled:opacity-50"
+          >
+            <span className={`material-symbols-outlined text-[16px] ${lookup.loading ? 'animate-spin' : ''}`}>
+              {lookup.loading ? 'progress_activity' : 'person_add'}
+            </span>
+            Add
+          </button>
+        </div>
+        {lookup.message ? (
+          <p className={`text-xs font-medium ${lookup.type === 'error' ? 'text-red-600' : 'text-emerald-700'}`}>{lookup.message}</p>
+        ) : null}
+        {error ? <p className="text-xs text-red-600 font-medium">{error}</p> : null}
+      </Field>
+
+      <div className="rounded-2xl border border-[#edf2f7] overflow-hidden">
+        <div className="flex items-center justify-between bg-[#f8fafc] px-4 py-2.5 border-b border-[#edf2f7]">
+          <span className="text-xs font-bold text-[#0f172a]">Selected students</span>
+          <span className="text-xs text-[#64748b]">
+            {students.length} student{students.length === 1 ? '' : 's'} · {students.length} case{students.length === 1 ? '' : 's'} will be created
+          </span>
+        </div>
+        {students.length === 0 ? (
+          <p className="px-4 py-6 text-center text-xs text-[#94a3b8]">No students added yet.</p>
+        ) : (
+          <ul className="divide-y divide-[#edf2f7]">
+            {students.map((s) => (
+              <li key={s.id} className="flex items-center gap-3 px-4 py-3">
+                <div className="h-9 w-9 shrink-0 rounded-xl bg-[#3d3793]/10 text-[#3d3793] flex items-center justify-center text-sm font-bold">
+                  {String(s.name || '?').charAt(0).toUpperCase()}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-[#0f172a] truncate">{s.name}</p>
+                  <p className="text-xs text-[#64748b] truncate">
+                    {s.enrollment_no}
+                    {s.program ? ` · ${String(s.program).toUpperCase()}` : ''}
+                    {s.hostel ? ` · ${s.hostel}${s.room ? ` ${s.room}` : ''}` : ''}
+                  </p>
+                </div>
+                <span className="hidden sm:block text-[11px] text-[#64748b] text-right">
+                  Prior cases <strong className="text-[#0f172a]">{s.priorCases}</strong>
+                  <br />
+                  DAC points <strong className="text-[#3d3793]">{s.total_points || 0}</strong>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onRemove(s.id)}
+                  title={`Remove ${s.name}`}
+                  aria-label={`Remove ${s.name}`}
+                  className="h-8 w-8 shrink-0 rounded-lg flex items-center justify-center text-slate-400 hover:bg-red-50 hover:text-red-600"
+                >
+                  <span className="material-symbols-outlined text-[18px]">close</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function StepIncidentDetails({
   form,
   set,
@@ -266,6 +409,13 @@ function StepIncidentDetails({
   listening,
   speechError,
   onToggleListening,
+  voiceLang = 'en',
+  onVoiceLangChange,
+  translating = false,
+  heardHindi = '',
+  groupStudents = null, // group incident: the students added in step 1
+  groupReadings = {},
+  onGroupReadingChange,
 }) {
   return (
     <div className="flex flex-col gap-5">
@@ -344,17 +494,50 @@ function StepIncidentDetails({
 
             {form.substanceType === 'Alcohol' && (
               <>
-                <Field label="Alcohol Reading *">
-                  <input
-                    type="text"
-                    value={form.alcoholReading}
-                    onChange={set('alcoholReading')}
-                    data-field="alcoholReading"
-                    placeholder="Enter breathalyzer reading"
-                    className={getInputClass('alcoholReading')}
-                  />
-                  {errors.alcoholReading ? <p className="text-xs text-red-600">{errors.alcoholReading}</p> : null}
-                </Field>
+                {groupStudents ? (
+                  // Group incident: each student was breathalysed separately.
+                  <div className="sm:col-span-2">
+                    <Field label="Alcohol Reading per Student *">
+                      <div className="rounded-xl border border-[#edf2f7] divide-y divide-[#edf2f7]">
+                        {groupStudents.map((s) => {
+                          const key = `groupReading_${s.id}`;
+                          return (
+                            <div key={s.id} className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 px-4 py-3">
+                              <div className="min-w-0 sm:w-1/2">
+                                <p className="text-sm font-semibold text-[#0f172a] truncate">{s.name}</p>
+                                <p className="text-xs text-[#64748b]">{s.enrollment_no}</p>
+                              </div>
+                              <div className="sm:w-1/2">
+                                <input
+                                  type="text"
+                                  value={groupReadings[s.id] || ''}
+                                  onChange={(e) => onGroupReadingChange(s.id, e.target.value)}
+                                  data-field={key}
+                                  placeholder="Breathalyzer reading"
+                                  aria-label={`Alcohol reading for ${s.name}`}
+                                  className={getInputClass(key)}
+                                />
+                                {errors[key] ? <p className="mt-1 text-xs text-red-600">{errors[key]}</p> : null}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </Field>
+                  </div>
+                ) : (
+                  <Field label="Alcohol Reading *">
+                    <input
+                      type="text"
+                      value={form.alcoholReading}
+                      onChange={set('alcoholReading')}
+                      data-field="alcoholReading"
+                      placeholder="Enter breathalyzer reading"
+                      className={getInputClass('alcoholReading')}
+                    />
+                    {errors.alcoholReading ? <p className="text-xs text-red-600">{errors.alcoholReading}</p> : null}
+                  </Field>
+                )}
 
                 <Field label="Location Found *">
                   <select
@@ -486,6 +669,28 @@ function StepIncidentDetails({
       </AnimatePresence>
 
       <Field label="Incident Description">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className="text-xs text-[#64748b]">Voice input language</span>
+          <div className="inline-flex rounded-lg bg-[#f1f5f9] p-1" role="radiogroup" aria-label="Voice input language">
+            {[
+              { key: 'en', label: 'English' },
+              { key: 'hi', label: 'Hindi → English' },
+            ].map((option) => (
+              <button
+                key={option.key}
+                type="button"
+                role="radio"
+                aria-checked={voiceLang === option.key}
+                onClick={() => onVoiceLangChange(option.key)}
+                className={`px-3 py-1 rounded-md text-xs font-semibold transition-colors ${
+                  voiceLang === option.key ? 'bg-white text-[#3d3793] shadow-sm' : 'text-[#64748b] hover:text-[#0f172a]'
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="relative">
           <textarea
             value={description}
@@ -497,8 +702,9 @@ function StepIncidentDetails({
           <button
             type="button"
             onClick={onToggleListening}
+            disabled={translating}
             aria-label={listening ? 'Stop listening' : 'Start voice input'}
-            title={listening ? 'Listening...' : 'Start voice input'}
+            title={listening ? 'Click to stop' : 'Start voice input'}
             className={`absolute bottom-3 right-3 h-10 w-10 rounded-full border shadow-sm flex items-center justify-center transition-all ${
               listening
                 ? 'bg-red-500 text-white border-red-500 animate-pulse'
@@ -509,10 +715,16 @@ function StepIncidentDetails({
           </button>
           {listening ? (
             <span className="absolute bottom-14 right-2 rounded-md bg-[#0f172a] px-2 py-1 text-[11px] font-medium text-white shadow-sm">
-              Listening...
+              {voiceLang === 'hi' ? 'Recording Hindi… click mic to stop' : 'Listening...'}
             </span>
           ) : null}
         </div>
+        {voiceLang === 'hi' && (translating || heardHindi) ? (
+          <p className="text-xs text-[#64748b]">
+            {translating ? 'Translating to English… ' : listening ? 'Hearing: ' : 'Heard: '}
+            <span lang="hi" className="text-[#0f172a]">{heardHindi}</span>
+          </p>
+        ) : null}
         {speechError ? <p className="text-xs text-red-600">{speechError}</p> : null}
       </Field>
     </div>
@@ -564,7 +776,7 @@ function StepEvidence({
           <span className="font-semibold text-[#3d3793]">Click to upload</span>
           <span className="text-[#64748b]"> or drag and drop</span>
         </p>
-        <p className="text-[#64748b] text-xs">PDF, JPG, PNG or MP4 (MAX. 10MB)</p>
+        <p className="text-[#64748b] text-xs">PDF, JPG, PNG or MP4 (MAX. 2 MB)</p>
       </label>
       {uploadError && <p className="text-xs text-red-600">{uploadError}</p>}
       {file && (
@@ -589,14 +801,20 @@ function StepEvidence({
   );
 }
 
-function StepReview({ form }) {
+function StepReview({ form, groupStudents, groupReadings = {} }) {
+  const isGroup = Array.isArray(groupStudents);
+  const showReadings = isGroup && form.offenseType === 'Substance Abuse' && form.substanceType === 'Alcohol';
   const rows = [
-    { label: 'Student Name', value: form.studentName || '-' },
-    { label: 'Enrollment Number', value: form.rollNumber || '-' },
-    { label: 'Department', value: form.department || '-' },
-    { label: 'Year', value: form.year || '-' },
-    { label: 'Hostel', value: form.hostel || '-' },
-    { label: 'Room Number', value: form.roomNo || '-' },
+    ...(isGroup
+      ? [{ label: 'Incident Type', value: `Group incident · ${groupStudents.length} students` }]
+      : [
+        { label: 'Student Name', value: form.studentName || '-' },
+        { label: 'Enrollment Number', value: form.rollNumber || '-' },
+        { label: 'Department', value: form.department || '-' },
+        { label: 'Year', value: form.year || '-' },
+        { label: 'Hostel', value: form.hostel || '-' },
+        { label: 'Room Number', value: form.roomNo || '-' },
+      ]),
     { label: 'Offense Type', value: form.offenseType || '-' },
     { label: 'Time of Incident', value: form.incidentTime || '-' },
   ];
@@ -608,7 +826,7 @@ function StepReview({ form }) {
     });
 
     if (form.substanceType === 'Alcohol') {
-      rows.push({ label: 'Alcohol Reading', value: form.alcoholReading || '-' });
+      if (!isGroup) rows.push({ label: 'Alcohol Reading', value: form.alcoholReading || '-' });
       rows.push({
         label: 'Location Found',
         value: form.locationFound === 'Other' ? (form.customLocation || 'Other') : (form.locationFound || '-'),
@@ -636,7 +854,29 @@ function StepReview({ form }) {
         <span className="material-symbols-outlined text-[#3d3793] text-[20px]">fact_check</span>
         <h2 className="text-[#0f172a] font-bold text-[18px] leading-7">Review Submission</h2>
       </div>
-      <p className="text-[#64748b] text-sm leading-5">Please verify all details before submitting.</p>
+      <p className="text-[#64748b] text-sm leading-5">
+        {isGroup
+          ? `Please verify all details before submitting. ${groupStudents.length} separate cases will be created, one per student.`
+          : 'Please verify all details before submitting.'}
+      </p>
+      {isGroup && (
+        <div className="rounded-lg border border-[#e2e8f0] overflow-hidden">
+          <div className="bg-[#f8fafc] px-4 py-2.5 text-xs font-bold text-[#0f172a] border-b border-[#e2e8f0]">Students</div>
+          {groupStudents.map((s, i) => (
+            <div key={s.id} className={`flex items-center justify-between gap-3 px-4 py-2.5 ${i % 2 === 0 ? 'bg-white' : 'bg-[#f8fafc]'}`}>
+              <span className="text-[#0f172a] text-sm font-medium">{s.name}</span>
+              <span className="text-[#64748b] text-xs text-right">
+                {s.enrollment_no}{s.hostel ? ` · ${s.hostel}${s.room ? ` ${s.room}` : ''}` : ''}
+                {showReadings ? (
+                  <>
+                    {' · '}Reading: <strong className="text-[#0f172a]">{groupReadings[s.id] || '-'}</strong>
+                  </>
+                ) : null}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
       <div className="rounded-lg border border-[#e2e8f0] overflow-hidden">
         {rows.map(({ label, value }, i) => (
           <div key={label} className={`flex items-center justify-between px-4 py-3 ${i % 2 === 0 ? 'bg-[#f8fafc]' : 'bg-white'}`}>
@@ -666,12 +906,38 @@ function StepSubmit({ caseResult, loading, error, onSubmit, onNavigateDashboard 
           <h2 className="text-[#0f172a] font-bold text-[22px]">Case Submitted Successfully</h2>
           <p className="text-[#64748b] text-sm">Your case has been registered and is now under review.</p>
         </div>
-        <div className="bg-[#ecfdf5] border border-[#a7f3d0] rounded-xl px-8 py-4 flex flex-col items-center gap-1">
-          <span className="text-[#065f46] text-xs font-semibold uppercase tracking-widest">Case Token</span>
-          <span className="text-[#047857] font-bold text-2xl" style={{ fontFamily: 'Liberation Mono, monospace' }}>
-            {caseResult.token}
-          </span>
-        </div>
+        {caseResult.groupCases ? (
+          <div className="w-full max-w-md bg-[#ecfdf5] border border-[#a7f3d0] rounded-xl overflow-hidden">
+            <p className="px-4 py-2.5 text-center text-[#065f46] text-xs font-semibold uppercase tracking-widest border-b border-[#a7f3d0]">
+              {caseResult.groupCases.length} Separate Cases Created
+            </p>
+            <ul className="divide-y divide-[#d1fae5] bg-white">
+              {caseResult.groupCases.map((c) => (
+                <li key={c.id} className="flex items-center justify-between gap-3 px-4 py-2.5">
+                  <span className="text-sm text-[#0f172a] font-medium truncate">
+                    {c.studentName}
+                    {c.enrollment ? <span className="text-xs text-[#64748b] font-normal"> · {c.enrollment}</span> : null}
+                  </span>
+                  <span className="text-[#047857] font-bold text-sm shrink-0" style={{ fontFamily: 'Liberation Mono, monospace' }}>
+                    {c.ref}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : (
+          <div className="bg-[#ecfdf5] border border-[#a7f3d0] rounded-xl px-8 py-4 flex flex-col items-center gap-1">
+            <span className="text-[#065f46] text-xs font-semibold uppercase tracking-widest">Case Token</span>
+            <span className="text-[#047857] font-bold text-2xl" style={{ fontFamily: 'Liberation Mono, monospace' }}>
+              {caseResult.token}
+            </span>
+          </div>
+        )}
+        {caseResult.evidenceWarning && (
+          <p className="w-full max-w-md rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-800 text-center">
+            {caseResult.evidenceWarning}
+          </p>
+        )}
         <div className="grid grid-cols-3 gap-4 w-full max-w-xs">
           {[
             { label: 'Level', value: `Level ${caseResult.offenseLevel}` },
@@ -735,7 +1001,6 @@ function StepSubmit({ caseResult, loading, error, onSubmit, onNavigateDashboard 
 export default function RegisterCase() {
   const navigate = useNavigate();
   const { role } = useAuth();
-  const usersCacheRef = useRef(null);
 
   const [currentStep, setCurrentStep] = useState(0);
 
@@ -771,10 +1036,91 @@ export default function RegisterCase() {
   const [caseResult, setCaseResult] = useState(null);
   const [studentId, setStudentId] = useState(null);
   const [studentHistory, setStudentHistory] = useState(null);
+  // 'single' = one student; 'group' = several students, one separate case each.
+  const [incidentMode, setIncidentMode] = useState('single');
+  const [groupStudents, setGroupStudents] = useState([]);
+  const [groupInput, setGroupInput] = useState('');
+  const [groupLookup, setGroupLookup] = useState({ loading: false, type: '', message: '' });
+  // Group incident with alcohol: one breathalyzer reading per student, keyed by student id.
+  const [groupReadings, setGroupReadings] = useState({});
+
+  const setGroupReading = (studentId, value) => {
+    setGroupReadings((prev) => ({ ...prev, [studentId]: value }));
+    setErrors((prev) => {
+      const key = `groupReading_${studentId}`;
+      return prev[key] ? { ...prev, [key]: '' } : prev;
+    });
+  };
+
+  const addGroupStudent = async () => {
+    const enrollment = groupInput.trim();
+    if (!enrollment || groupLookup.loading) return;
+    if (groupStudents.some((s) => String(s.enrollment_no) === enrollment)) {
+      setGroupLookup({ loading: false, type: 'error', message: `${enrollment} is already in this group.` });
+      return;
+    }
+    if (groupStudents.length >= 50) {
+      setGroupLookup({ loading: false, type: 'error', message: 'A group incident can have at most 50 students.' });
+      return;
+    }
+    setGroupLookup({ loading: true, type: '', message: '' });
+    try {
+      let history = null;
+      try {
+        history = await getStudentHistory(enrollment);
+      } catch (lookupError) {
+        if (!/not found/i.test(lookupError?.message || '')) throw lookupError;
+      }
+      const student = history?.student;
+      if (!student) {
+        setGroupLookup({ loading: false, type: 'error', message: `No student found with enrollment ${enrollment}.` });
+        return;
+      }
+      setGroupStudents((prev) => [...prev, { ...student, priorCases: history.summary?.total || 0 }]);
+      setGroupInput('');
+      setErrors((prev) => ({ ...prev, groupStudents: '' }));
+      setGroupLookup({ loading: false, type: 'success', message: `${student.name} added.` });
+    } catch (err) {
+      setGroupLookup({ loading: false, type: 'error', message: err?.message || 'Lookup failed.' });
+    }
+  };
+
+  const removeGroupStudent = (id) => {
+    setGroupStudents((prev) => prev.filter((s) => s.id !== id));
+    setGroupReadings((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+    setGroupLookup({ loading: false, type: '', message: '' });
+  };
+
+  const changeIncidentMode = (mode) => {
+    setIncidentMode(mode);
+    setErrors({});
+    setGroupLookup({ loading: false, type: '', message: '' });
+  };
   const [description, setDescription] = useState('');
   const [listening, setListening] = useState(false);
   const [speechError, setSpeechError] = useState('');
+  // Voice input language: 'en' = English, 'hi' = Hindi speech translated to English.
+  const [voiceLang, setVoiceLang] = useState('en');
+  const [translating, setTranslating] = useState(false);
+  const [heardHindi, setHeardHindi] = useState('');
   const recognitionRef = useRef(null);
+  // Hindi mode records until the user clicks the mic again, then translates everything once.
+  const hindiFinalRef = useRef([]);
+  const stopRequestedRef = useRef(false);
+
+  // Leaving the page must not leave the microphone recording (Hindi mode auto-restarts).
+  useEffect(() => () => {
+    stopRequestedRef.current = true;
+    const recognition = recognitionRef.current;
+    if (recognition) {
+      recognition.onend = null;
+      recognition.abort();
+    }
+  }, []);
 
   const handleEvidenceSelect = (file) => {
     setEvidenceError('');
@@ -788,8 +1134,8 @@ export default function RegisterCase() {
       setEvidenceError('Unsupported file type. Use PDF, image, or video.');
       return;
     }
-    if (file.size > 10 * 1024 * 1024) {
-      setEvidenceError('File exceeds 10MB limit.');
+    if (file.size > 2 * 1024 * 1024) {
+      setEvidenceError('File exceeds the 2 MB limit.');
       return;
     }
     setEvidenceFile(file);
@@ -820,14 +1166,41 @@ export default function RegisterCase() {
     setForm((p) => ({ ...p, description: value }));
   };
 
+  const appendToDescription = (text) => {
+    setDescription((current) => {
+      const nextDescription = current ? `${current} ${text}` : text;
+      setForm((p) => ({ ...p, description: nextDescription }));
+      return nextDescription;
+    });
+  };
+
+  const translateRecordedHindi = () => {
+    const hindiText = hindiFinalRef.current.join(' ').replace(/\s+/g, ' ').trim();
+    hindiFinalRef.current = [];
+    if (!hindiText) return;
+    setHeardHindi(hindiText);
+    setTranslating(true);
+    translateHindiToEnglish(hindiText)
+      .then((result) => {
+        if (result?.translation) appendToDescription(result.translation);
+      })
+      .catch((translateError) => {
+        setSpeechError(`Could not translate the Hindi speech: ${translateError?.message || 'translation failed'}`);
+      })
+      .finally(() => setTranslating(false));
+  };
+
   const handleToggleListening = () => {
     setSpeechError('');
 
     if (listening && recognitionRef.current) {
+      // Hindi: onend translates the whole recording once it has fully stopped.
+      stopRequestedRef.current = true;
       recognitionRef.current.stop();
       setListening(false);
       return;
     }
+    if (translating) return;
 
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
@@ -835,35 +1208,74 @@ export default function RegisterCase() {
       return;
     }
 
-    const recognition = new SpeechRecognition();
-    recognition.lang = 'en-US';
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 1;
+    const isHindi = voiceLang === 'hi';
+    stopRequestedRef.current = false;
+    hindiFinalRef.current = [];
+    if (isHindi) setHeardHindi('');
 
-    recognition.onresult = (event) => {
-      const transcript = event.results?.[0]?.[0]?.transcript?.trim();
-      if (!transcript) return;
+    const startRecognition = () => {
+      const recognition = new SpeechRecognition();
+      recognition.lang = isHindi ? 'hi-IN' : 'en-US';
+      // Hindi keeps recording through pauses until the user clicks stop.
+      recognition.continuous = isHindi;
+      recognition.interimResults = isHindi;
+      recognition.maxAlternatives = 1;
+      let sessionFinal = [];
 
-      setDescription((current) => {
-        const nextDescription = current ? `${current} ${transcript}` : transcript;
-        setForm((p) => ({ ...p, description: nextDescription }));
-        return nextDescription;
-      });
-    };
+      recognition.onresult = (event) => {
+        if (!isHindi) {
+          const transcript = event.results?.[0]?.[0]?.transcript?.trim();
+          if (transcript) appendToDescription(transcript);
+          return;
+        }
+        // Collect final phrases; show interim words live so the user sees it is listening.
+        const finals = [];
+        let interim = '';
+        for (let i = 0; i < event.results.length; i += 1) {
+          const text = event.results[i]?.[0]?.transcript || '';
+          if (event.results[i].isFinal) finals.push(text.trim());
+          else interim += text;
+        }
+        sessionFinal = finals.filter(Boolean);
+        setHeardHindi([...hindiFinalRef.current, ...sessionFinal, interim.trim()].filter(Boolean).join(' '));
+      };
 
-    recognition.onerror = (event) => {
-      setSpeechError(event.error ? `Speech recognition error: ${event.error}` : 'Speech recognition failed.');
-      setListening(false);
-    };
+      recognition.onerror = (event) => {
+        // Pauses in Hindi mode are normal; the session restarts in onend.
+        if (isHindi && (event.error === 'no-speech' || event.error === 'aborted')) return;
+        stopRequestedRef.current = true;
+        setSpeechError(event.error ? `Speech recognition error: ${event.error}` : 'Speech recognition failed.');
+        setListening(false);
+      };
 
-    recognition.onend = () => {
-      setListening(false);
-      recognitionRef.current = null;
-    };
+      recognition.onend = () => {
+        if (isHindi) {
+          hindiFinalRef.current = [...hindiFinalRef.current, ...sessionFinal];
+          sessionFinal = [];
+          if (!stopRequestedRef.current) {
+            // The browser ended the session on its own (long silence): keep recording.
+            try {
+              startRecognition();
+              return;
+            } catch {
+              // Fall through and finish with what was captured.
+            }
+          }
+          recognitionRef.current = null;
+          setListening(false);
+          translateRecordedHindi();
+          return;
+        }
+        setListening(false);
+        recognitionRef.current = null;
+      };
 
-    recognitionRef.current = recognition;
-    try {
+      recognitionRef.current = recognition;
       recognition.start();
+    };
+
+    try {
+      startRecognition();
       setListening(true);
     } catch {
       recognitionRef.current = null;
@@ -898,12 +1310,17 @@ export default function RegisterCase() {
       setLookupStatusType('');
       setLookupStatusMessage('');
 
-      const users = usersCacheRef.current ?? await getUsers();
-      if (!usersCacheRef.current) usersCacheRef.current = users;
-
-      const user = users.find((entry) => String(entry.enrollment_no || '').trim().toLowerCase() === enrollment);
+      // One request for this student's record and history (instead of downloading every user).
+      let history = null;
+      try {
+        history = await getStudentHistory(enrollment);
+      } catch (lookupError) {
+        if (!/not found/i.test(lookupError?.message || '')) throw lookupError;
+      }
+      const user = history?.student;
       if (!user) {
         setStudentId(null);
+        setStudentHistory(null);
         setNameLocked(false);
         setLookupStatusType('error');
         setLookupStatusMessage('No student found.');
@@ -911,7 +1328,7 @@ export default function RegisterCase() {
       }
 
       setStudentId(user.id);
-      setStudentHistory(await getStudentHistory(enrollment));
+      setStudentHistory(history);
       setNameLocked(true);
 
       setForm((prev) => ({
@@ -992,7 +1409,11 @@ export default function RegisterCase() {
     const nextErrors = {};
 
     if (step === 0) {
-      if (!String(form.rollNumber || '').trim()) {
+      if (incidentMode === 'group') {
+        if (groupStudents.length < 2) {
+          nextErrors.groupStudents = 'Add at least 2 students for a group incident.';
+        }
+      } else if (!String(form.rollNumber || '').trim()) {
         nextErrors.rollNumber = 'This field is required';
       }
     }
@@ -1012,7 +1433,14 @@ export default function RegisterCase() {
           nextErrors.customSubstance = 'This field is required';
         }
         if (form.substanceType === 'Alcohol') {
-          if (!String(form.alcoholReading || '').trim()) {
+          if (incidentMode === 'group') {
+            // Every student in the group needs their own reading.
+            groupStudents.forEach((s) => {
+              if (!String(groupReadings[s.id] || '').trim()) {
+                nextErrors[`groupReading_${s.id}`] = 'Enter this student\'s reading';
+              }
+            });
+          } else if (!String(form.alcoholReading || '').trim()) {
             nextErrors.alcoholReading = 'This field is required';
           }
           if (!String(form.locationFound || '').trim()) {
@@ -1061,33 +1489,121 @@ export default function RegisterCase() {
     setError(null);
     setLoading(true);
     try {
-      if (!studentId || !form.offenseType) {
-        throw new Error('Please provide enrollment number and offense type before submitting.');
+      const isGroup = incidentMode === 'group';
+      if (isGroup ? groupStudents.length < 2 || !form.offenseType : !studentId || !form.offenseType) {
+        throw new Error(isGroup
+          ? 'Add at least 2 students and an offense type before submitting.'
+          : 'Please provide enrollment number and offense type before submitting.');
       }
 
-      const payload = await createCase({
-        student_id: studentId,
+      const isSubstance = form.offenseType === 'Substance Abuse';
+      const isAlcohol = isSubstance && form.substanceType === 'Alcohol';
+      const substanceType = isSubstance
+        ? (form.substanceType === 'Other' ? (form.customSubstance || 'Other') : form.substanceType) || null
+        : null;
+      const hostelLocation = `${form.hostel || ''}${form.roomNo ? ` Room ${form.roomNo}` : ''}`.trim() || null;
+      const foundLocation = isAlcohol
+        ? (form.locationFound === 'Other' ? form.customLocation : form.locationFound) || null
+        : null;
+      // alcohol_reading is a numeric column; keep a non-numeric reading in the notes instead.
+      const alcoholReadingRaw = isAlcohol ? String(form.alcoholReading || '').trim() : '';
+      const alcoholReadingNumber = alcoholReadingRaw !== '' && !Number.isNaN(Number(alcoholReadingRaw))
+        ? Number(alcoholReadingRaw)
+        : null;
+
+      // Offense-specific details that have no dedicated column.
+      const noteLines = [];
+      if (alcoholReadingRaw && alcoholReadingNumber === null) noteLines.push(`Alcohol reading: ${alcoholReadingRaw}`);
+      if (form.offenseType === 'Harassment') {
+        noteLines.push(`Victim name: ${form.victimName}`);
+        noteLines.push(`Harassment type: ${toTitleCase(form.harassmentType)}`);
+      }
+      if (form.offenseType === 'Vandalism') {
+        noteLines.push(`Property damaged: ${form.propertyDamaged}`);
+        noteLines.push(`Estimated damage cost: Rs. ${form.damageCost}`);
+      }
+
+      // The form records the time only; the incident is registered on the day it is reported.
+      const now = new Date();
+      const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+      // Incident details shared by every case registered from this form.
+      const shared = {
         offense_type: form.offenseType === 'Other' ? (form.customOffense || 'Other') : form.offenseType,
         description: form.description || null,
-        location: `${form.hostel || ''}${form.roomNo ? ` Room ${form.roomNo}` : ''}`.trim() || null,
-        incident_date: null,
+        incident_date: today,
+        incident_time: form.incidentTime || null,
+        substance_type: substanceType,
+        alcohol_reading: alcoholReadingNumber,
+        notes: noteLines.length ? noteLines.join('\n') : null,
         severity: 'low',
         evidence_url: null,
-      });
+      };
 
-      let evidenceUrl = evidenceUploadedUrl;
-      if (evidenceFile && !evidenceUrl) {
-        const uploadPayload = await uploadEvidence(evidenceFile, { caseId: payload.id });
-        evidenceUrl = uploadPayload?.fileUrl || '';
-        setEvidenceUploadedUrl(evidenceUrl);
+      let createdCases;
+      if (isGroup) {
+        // One separate case per student; each keeps that student's own hostel and room.
+        const result = await createGroupCases({
+          ...shared,
+          incident_location: foundLocation || null,
+          students: groupStudents.map((s) => {
+            const student = {
+              student_id: s.id,
+              location: `${s.hostel || ''}${s.room ? ` Room ${s.room}` : ''}`.trim() || null,
+            };
+            if (isAlcohol) {
+              // Each student's own reading; a non-numeric one goes into that case's notes.
+              const raw = String(groupReadings[s.id] || '').trim();
+              const numeric = raw !== '' && !Number.isNaN(Number(raw)) ? Number(raw) : null;
+              student.alcohol_reading = numeric;
+              if (raw && numeric === null) {
+                student.notes = [...noteLines, `Alcohol reading: ${raw}`].join('\n');
+              }
+            }
+            return student;
+          }),
+        });
+        createdCases = result.cases || [];
+      } else {
+        createdCases = [await createCase({
+          ...shared,
+          student_id: studentId,
+          location: hostelLocation,
+          incident_location: foundLocation || hostelLocation,
+        })];
       }
 
+      // The cases already exist at this point, so an evidence failure must not look like a
+      // failed registration (that would invite a duplicate submission).
+      let evidenceWarning = '';
+      if (evidenceFile && !evidenceUploadedUrl && createdCases.length) {
+        try {
+          const uploadPayload = await uploadEvidence(evidenceFile, isGroup
+            ? { caseIds: createdCases.map((c) => c.id) }
+            : { caseId: createdCases[0].id });
+          setEvidenceUploadedUrl(uploadPayload?.fileUrl || '');
+        } catch (uploadError) {
+          evidenceWarning = `The ${isGroup ? 'cases were' : 'case was'} registered, but the evidence file was not uploaded: ${uploadError?.message || 'upload failed'}`;
+        }
+      }
+
+      const first = createdCases[0] || {};
+      const nameById = Object.fromEntries(groupStudents.map((s) => [s.id, s]));
       setCaseResult({
-        token: `#${payload.id}`,
+        token: first.external_case_id || `#${first.id}`,
         offenseLevel: 1,
         severityScore: 25,
-        fine: Number(payload.penalty_points || 0) * 100,
-        penaltyPoints: Number(payload.penalty_points || 0),
+        fine: Number(first.penalty_points || 0) * 100,
+        penaltyPoints: Number(first.penalty_points || 0),
+        evidenceWarning,
+        groupCases: isGroup
+          ? createdCases.map((c) => ({
+            id: c.id,
+            ref: c.external_case_id || `#${c.id}`,
+            studentName: nameById[c.student_id]?.name || 'Student',
+            enrollment: nameById[c.student_id]?.enrollment_no || '',
+          }))
+          : null,
       });
     } catch (err) {
       setError(err?.message ?? 'Failed to submit case. Please try again.');
@@ -1105,7 +1621,20 @@ export default function RegisterCase() {
   const isFirst = currentStep === 0;
 
   const stepContent = [
-    <StepStudentInfo
+    incidentMode === 'group' ? (
+      <StepGroupStudents
+        students={groupStudents}
+        input={groupInput}
+        onInputChange={(value) => {
+          setGroupInput(value);
+          if (groupLookup.message) setGroupLookup({ loading: false, type: '', message: '' });
+        }}
+        onAdd={addGroupStudent}
+        onRemove={removeGroupStudent}
+        lookup={groupLookup}
+        error={errors.groupStudents}
+      />
+    ) : <StepStudentInfo
       form={form}
       set={set}
       onEnrollmentChange={handleEnrollmentChange}
@@ -1121,6 +1650,9 @@ export default function RegisterCase() {
       <StepIncidentDetails
         form={form}
         set={set}
+        groupStudents={incidentMode === 'group' ? groupStudents : null}
+        groupReadings={groupReadings}
+        onGroupReadingChange={setGroupReading}
         onOffenseTypeChange={handleOffenseTypeChange}
         errors={errors}
         getInputClass={getInputClass}
@@ -1129,6 +1661,25 @@ export default function RegisterCase() {
         listening={listening}
         speechError={speechError}
         onToggleListening={handleToggleListening}
+        voiceLang={voiceLang}
+        onVoiceLangChange={(lang) => {
+          if (listening && recognitionRef.current) {
+            // Switching language discards the current recording.
+            stopRequestedRef.current = true;
+            hindiFinalRef.current = [];
+            const recognition = recognitionRef.current;
+            recognition.onend = null;
+            recognition.onresult = null;
+            recognition.abort();
+            recognitionRef.current = null;
+            setListening(false);
+          }
+          setVoiceLang(lang);
+          setSpeechError('');
+          setHeardHindi('');
+        }}
+        translating={translating}
+        heardHindi={heardHindi}
       />,
     <StepEvidence
       dragOver={dragOver}
@@ -1139,11 +1690,15 @@ export default function RegisterCase() {
       uploadError={evidenceError}
       uploadedUrl={evidenceUploadedUrl}
     />,
-    <StepReview form={form} />,
+    <StepReview
+      form={form}
+      groupStudents={incidentMode === 'group' ? groupStudents : null}
+      groupReadings={groupReadings}
+    />,
     <StepSubmit
       caseResult={caseResult} loading={loading} error={error}
       onSubmit={handleSubmit}
-      onNavigateDashboard={() => navigate(role === 'warden' ? '/warden/cases' : '/dashboard')}
+      onNavigateDashboard={() => navigate(role === 'chief_warden' ? '/chief-warden/dashboard' : '/warden/dashboard')}
     />,
   ];
 
@@ -1162,118 +1717,46 @@ export default function RegisterCase() {
           </div>
         </div>
 
-        <div className="flex flex-col lg:flex-row gap-6 items-start">
-          <div className="flex-1 min-w-0 w-full">
-            <div className="bg-white rounded-2xl border border-slate-100 p-6 md:p-8 flex flex-col gap-6">
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={currentStep}
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  transition={{ duration: 0.2, ease: 'easeInOut' }}
+        <div className="bg-white rounded-2xl border border-slate-100 p-6 md:p-8 flex flex-col gap-6">
+          {currentStep === 0 && !caseResult && (
+            <IncidentModeToggle mode={incidentMode} onChange={changeIncidentMode} />
+          )}
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={currentStep}
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.2, ease: 'easeInOut' }}
+            >
+              {stepContent[currentStep]}
+            </motion.div>
+          </AnimatePresence>
+
+          {!(isLast && caseResult) && (
+            <div className="flex items-center justify-between pt-5 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={goPrev}
+                disabled={isFirst}
+                className="flex items-center gap-2 px-5 py-2.5 text-slate-500 text-xs font-bold hover:text-slate-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <span className="material-symbols-outlined text-[16px]">arrow_back</span>
+                Previous
+              </button>
+
+              {!isLast && (
+                <button
+                  type="button"
+                  onClick={goNext}
+                  className="flex items-center gap-2 px-7 py-2.5 bg-[#3d3793] hover:bg-indigo-700 text-white text-xs font-bold rounded-full transition-all active:scale-95"
                 >
-                  {stepContent[currentStep]}
-                </motion.div>
-              </AnimatePresence>
-
-              {!(isLast && caseResult) && (
-                <div className="flex items-center justify-between pt-5 border-t border-slate-100">
-                  <button
-                    type="button"
-                    onClick={goPrev}
-                    disabled={isFirst}
-                    className="flex items-center gap-2 px-5 py-2.5 text-slate-500 text-xs font-bold hover:text-slate-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    <span className="material-symbols-outlined text-[16px]">arrow_back</span>
-                    Previous
-                  </button>
-
-                  {!isLast && (
-                    <button
-                      type="button"
-                      onClick={goNext}
-                      className="flex items-center gap-2 px-7 py-2.5 bg-[#3d3793] hover:bg-indigo-700 text-white text-xs font-bold rounded-full transition-all active:scale-95"
-                    >
-                      <span>Next Step</span>
-                      <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
-                    </button>
-                  )}
-                </div>
+                  <span>Next Step</span>
+                  <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
+                </button>
               )}
             </div>
-          </div>
-
-          <div className="w-full lg:w-[320px] lg:flex-shrink-0 flex flex-col gap-4">
-            <div className="bg-white border border-slate-100 rounded-2xl p-5 flex flex-col gap-3">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-[#3d3793] text-[18px]">info</span>
-                <h3 className="text-[#0f172a] font-bold text-sm leading-5">Registration Guide</h3>
-              </div>
-              <div className="flex flex-col gap-3">
-                {[
-                  'Type student Roll Number and press Enter to auto-retrieve profile.',
-                  'Review prior violation records to assess appropriate severity.',
-                  'Attach witness statements, incident logs, or media files.',
-                  'Summary will generate a verifiable tracking token upon submission.',
-                ].map((tip, i) => (
-                  <div key={i} className="flex items-start gap-2.5">
-                    <div className="w-5 h-5 rounded-lg bg-purple-50 text-[#3d3793] flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <span className="text-[11px] font-bold">{i + 1}</span>
-                    </div>
-                    <p className="text-slate-500 text-xs leading-relaxed">{tip}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="relative rounded-2xl p-5 overflow-hidden border bg-white border-slate-200/80">
-              <div className="relative flex flex-col gap-2.5">
-                <div className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-[#3d3793] text-[18px]">
-                    {caseResult ? 'check_circle' : 'verified'}
-                  </span>
-                  <span className="text-[#3d3793] font-bold text-xs uppercase tracking-wider">
-                    {caseResult ? 'Case Registered' : 'Token Generator'}
-                  </span>
-                </div>
-                <p className="text-slate-600 text-xs leading-relaxed">
-                  {caseResult
-                    ? 'Case successfully logged in DAC database.'
-                    : 'An immutable token ID will be issued upon form submission.'}
-                </p>
-                <div className="flex items-center justify-between bg-white border border-purple-100 rounded-2xl px-3.5 py-2.5 shadow-2xs">
-                  <span className="text-[#3d3793] font-mono font-bold text-sm">
-                    {caseResult ? caseResult.token : 'DAC-2026-XXXX'}
-                  </span>
-                  {caseResult && (
-                    <button
-                      type="button"
-                      title="Copy token"
-                      onClick={() => navigator.clipboard.writeText(caseResult.token)}
-                      className="text-[#3d3793] hover:text-indigo-800"
-                    >
-                      <span className="material-symbols-outlined text-[16px]">content_copy</span>
-                    </button>
-                  )}
-                </div>
-                {caseResult && (
-                  <div className="grid grid-cols-3 gap-2 mt-1">
-                    {[
-                      { label: 'Offense Level', value: `Lvl ${caseResult.offenseLevel}` },
-                      { label: 'Sanction Fine', value: `₹${caseResult.fine?.toLocaleString()}` },
-                      { label: 'DAC Points', value: `+${caseResult.penaltyPoints}` },
-                    ].map(({ label, value }) => (
-                      <div key={label} className="bg-white border border-purple-100 rounded-xl p-2 text-center shadow-2xs">
-                        <p className="text-[#3d3793] font-bold text-xs">{value}</p>
-                        <p className="text-slate-400 text-[9px] font-bold">{label}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
+          )}
         </div>
       </div>
     </DACLayout>

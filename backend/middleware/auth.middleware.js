@@ -3,6 +3,9 @@ import jwt from 'jsonwebtoken';
 const JWT_SECRET = process.env.JWT_SECRET || 'dacexpertsys_dev_secret_change_me';
 
 export function verifyToken(req, res, next) {
+  // Preflight requests never carry the application JWT and must reach CORS.
+  if (req.method === 'OPTIONS') return next();
+
   const authHeader = req.headers.authorization || '';
   const [scheme, token] = authHeader.split(' ');
 

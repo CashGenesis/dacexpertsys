@@ -4,7 +4,7 @@ import {
   createRuleController,
   updateRuleController,
   deleteRuleController,
-  seedRulesController,
+  loadDacPolicyRulesController,
 } from '../controllers/rules.controller.js';
 import { requireRoles } from '../middleware/auth.middleware.js';
 
@@ -14,6 +14,6 @@ router.get('/', getRulesController);
 router.post('/', requireRoles('admin'), createRuleController);
 router.put('/:id', requireRoles('admin'), updateRuleController);
 router.delete('/:id', requireRoles('admin'), deleteRuleController);
-router.post('/seed', requireRoles('admin'), seedRulesController);
+router.post('/load-dac-policy', requireRoles('admin'), loadDacPolicyRulesController);
 
 export default router;

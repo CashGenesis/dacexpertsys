@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { getCaseRecommendation } from '../services/api';
 import DACLayout from '../components/layout/DACLayout';
 import { Button, PageHeader } from '../components/cases/parts';
 
 const REPORTS_PAGE_SIZE = 10;
 import { pageVariants, listVariants, itemVariants } from '../lib/motion';
-import { getCases, getUsers } from '../services/api';
+import { usePagedCases } from '../hooks/usePagedCases';
 
 // ── Icons ───────────────────────────────────────────────────────────────────
 const ScalesIcon = () => (
@@ -132,105 +134,90 @@ function toRisk(score) {
   return 'Low';
 }
 
-function toPunishment(points, severity) {
-  if (points >= 40 || severity === 'Critical') return '2-Week Academic Suspension';
-  if (points >= 25 || severity === 'High') return 'Fine + 1-Month Campus Work';
-  if (points >= 10 || severity === 'Medium') return 'Formal Apology & 1-Week Probation';
-  return 'Official Warning';
-}
+const FACTOR_STYLES = {
+  aggravating: { Icon: WarningIcon, bg: 'bg-orange-50', border: 'border-orange-100', label: 'Aggravating' },
+  history: { Icon: ExclamationIcon, bg: 'bg-red-50', border: 'border-red-100', label: 'History' },
+  evidence: { Icon: ExclamationIcon, bg: 'bg-red-50', border: 'border-red-100', label: 'Evidence' },
+  mitigating: { Icon: InfoCircleIcon, bg: 'bg-blue-50', border: 'border-blue-100', label: 'Mitigating' },
+  policy: { Icon: InfoCircleIcon, bg: 'bg-slate-50', border: 'border-slate-200', label: 'Policy' },
+};
 
-const FACTORS = [
-  {
-    Icon: WarningIcon,
-    bg: 'bg-orange-50',
-    border: 'border-orange-100',
-    title: 'Repeat Offense',
-    detail: 'Student has one prior warning for academic misconduct in the previous semester (Case #3012).',
-  },
-  {
-    Icon: ExclamationIcon,
-    bg: 'bg-red-50',
-    border: 'border-red-100',
-    title: 'Evidence Weight',
-    detail: 'Turnitin report indicates 45% similarity match, exceeding the threshold for Level 1 offenses.',
-  },
-  {
-    Icon: InfoCircleIcon,
-    bg: 'bg-blue-50',
-    border: 'border-blue-100',
-    title: 'Mitigating Circumstances',
-    detail: 'Student self-reported the issue prior to final grading, which reduced the recommended penalty from Expulsion to Suspension.',
-  },
-];
+const RISK_COLORS = {
+  Critical: { text: 'text-[#ef4444]', border: 'border-l-[#ef4444]' },
+  High: { text: 'text-[#ef4444]', border: 'border-l-[#ef4444]' },
+  Moderate: { text: 'text-[#f97316]', border: 'border-l-[#f97316]' },
+  Low: { text: 'text-[#22c55e]', border: 'border-l-[#22c55e]' },
+};
 
 // ── Main Component ─────────────────────────────────────────────────────────
+// API case row -> recommendation card. Student name and enrollment come with the case row.
+function toRecommendation(entry) {
+  const score = Number(entry.severity_score ?? entry.penalty_points ?? 0);
+  const severity = toTitleCase(entry.severity);
+  return {
+    caseId: entry.id,
+    id: `#${entry.id}`,
+    studentName: entry.student_name || 'Unknown Student',
+    studentId: entry.enrollment_no || `ID-${entry.student_id}`,
+    offense: toTitleCase(entry.offense_type) || 'N/A',
+    date: formatDate(entry.incident_date ?? entry.created_at),
+    status: 'Awaiting Committee Decision',
+    severity,
+    score,
+    risk: toRisk(score),
+  };
+}
+
+// Only cases the DSW has forwarded for the final committee decision (status pending_admin).
+// Earlier stages may still end with a warning, so a penalty recommendation is not useful there.
+const FINAL_STAGE_QUERY = { status: 'pending_admin' };
+
 export default function Reports() {
-  const hasLoggedResponseRef = useRef(false);
   const [selectedCase, setSelectedCase] = useState(null);
   const [search, setSearch] = useState('');
-  const [page, setPage] = useState(0);
-  const [cases, setCases] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const navigate = useNavigate();
+  // AI recommendation for the open case: { status: 'loading' | 'done' | 'error', data, error }.
+  const [rec, setRec] = useState(null);
+  const recCacheRef = useRef(new Map()); // caseId -> recommendation, so going back and forth is free
+  const activeCaseRef = useRef(null);
 
-  useEffect(() => {
-    let mounted = true;
-
-    async function loadData() {
-      try {
-        setLoading(true);
-        setError('');
-
-        const [casesResponse, usersResponse] = await Promise.all([getCases(), getUsers()]);
-
-        if (!hasLoggedResponseRef.current) {
-          console.log('Reports API response:', { cases: casesResponse, users: usersResponse });
-          hasLoggedResponseRef.current = true;
-        }
-
-        const usersById = Object.fromEntries(usersResponse.map((user) => [String(user.id), user]));
-
-        const mappedCases = casesResponse.map((entry) => {
-          const student = usersById[String(entry.student_id)] ?? {};
-          const score = Number(entry.severity_score ?? entry.penalty_points ?? 0);
-          const severity = toTitleCase(entry.severity);
-          return {
-            id: `#${entry.id}`,
-            studentName: student.name || 'Unknown Student',
-            studentId: student.enrollment_no || `ID-${entry.student_id}`,
-            offense: toTitleCase(entry.offense_type) || 'N/A',
-            date: formatDate(entry.incident_date ?? entry.created_at),
-            status: 'Pending Recommendation',
-            punishment: toPunishment(Number(entry.penalty_points ?? 0), severity),
-            score,
-            risk: toRisk(score),
-          };
-        });
-
-        if (mounted) setCases(mappedCases);
-      } catch (loadError) {
-        if (mounted) {
-          setError(loadError?.message || 'Failed to fetch recommendation data.');
-          setCases([]);
-        }
-      } finally {
-        if (mounted) setLoading(false);
+  // Calls Groq only when a case is opened (or Regenerate is clicked).
+  const loadRecommendation = useCallback(async (caseId, { force = false } = {}) => {
+    activeCaseRef.current = caseId;
+    const cached = recCacheRef.current.get(caseId);
+    if (cached && !force) {
+      setRec({ status: 'done', data: cached, error: '' });
+      return;
+    }
+    setRec({ status: 'loading', data: null, error: '' });
+    try {
+      const data = await getCaseRecommendation(caseId);
+      recCacheRef.current.set(caseId, data);
+      if (activeCaseRef.current === caseId) setRec({ status: 'done', data, error: '' });
+    } catch (recError) {
+      if (activeCaseRef.current === caseId) {
+        setRec({ status: 'error', data: null, error: recError?.message || 'Could not generate the recommendation.' });
       }
     }
-
-    loadData();
-    return () => {
-      mounted = false;
-    };
   }, []);
 
-  const filteredCases = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return cases;
-    return cases.filter((c) =>
-      [c.id, c.studentName, c.studentId, c.offense].some((v) => String(v).toLowerCase().includes(q))
-    );
-  }, [cases, search]);
+  const openCase = (c) => {
+    setSelectedCase(c);
+    loadRecommendation(c.caseId);
+  };
+
+  const closeCase = () => {
+    activeCaseRef.current = null;
+    setSelectedCase(null);
+    setRec(null);
+  };
+  // Search and paging run on the server; only the visible page is downloaded.
+  const { rows: pageCases, total, page, setPage, loading, error } = usePagedCases({
+    query: FINAL_STAGE_QUERY,
+    search,
+    pageSize: REPORTS_PAGE_SIZE,
+    map: toRecommendation,
+  });
 
   const renderDetailView = () => (
     <motion.div
@@ -242,7 +229,7 @@ export default function Reports() {
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-8">
         <div>
           <div className="flex items-center gap-2 text-sm text-[#94a3b8] mb-3">
-            <button onClick={() => setSelectedCase(null)} className="hover:text-[#3d3793] transition-colors">Cases</button>
+            <button onClick={closeCase} className="hover:text-[#3d3793] transition-colors">Cases</button>
             <ChevronRightIcon />
             <span className="text-[#3d3793] font-medium">Case {selectedCase.id}</span>
             <ChevronRightIcon />
@@ -257,15 +244,49 @@ export default function Reports() {
         </div>
 
         <div className="flex gap-3 mt-2 shrink-0">
-          <button onClick={() => setSelectedCase(null)} className="flex items-center gap-2 border border-[#e2e8f0] bg-white text-[#64748b] text-sm font-medium px-4 py-2.5 rounded-lg hover:border-[#3d3793] hover:text-[#3d3793] transition-colors shadow-sm">
+          <button onClick={closeCase} className="flex items-center gap-2 border border-[#e2e8f0] bg-white text-[#64748b] text-sm font-medium px-4 py-2.5 rounded-lg hover:border-[#3d3793] hover:text-[#3d3793] transition-colors shadow-sm">
             <BackIcon /> Back to Cases
           </button>
-          <button className="flex items-center gap-2 border border-[#e2e8f0] bg-white text-[#64748b] text-sm font-medium px-4 py-2.5 rounded-lg hover:border-[#3d3793] hover:text-[#3d3793] transition-colors shadow-sm">
+          <button
+            onClick={() => window.print()}
+            disabled={rec?.status !== 'done'}
+            className="flex items-center gap-2 border border-[#e2e8f0] bg-white text-[#64748b] text-sm font-medium px-4 py-2.5 rounded-lg hover:border-[#3d3793] hover:text-[#3d3793] transition-colors shadow-sm disabled:opacity-50"
+          >
             <DownloadIcon /> Download Report
           </button>
         </div>
       </div>
 
+      {rec?.status === 'loading' && (
+        <div className="bg-white border border-[#e2e8f0] rounded-xl shadow-sm p-8">
+          <div className="flex items-center gap-3 text-[#3d3793]">
+            <span className="material-symbols-outlined animate-spin text-[22px]">progress_activity</span>
+            <p className="text-sm font-medium">Analysing the case, the student&apos;s history and the DAC policy…</p>
+          </div>
+          <div className="mt-6 space-y-3">
+            <div className="h-5 w-2/3 rounded bg-slate-100 animate-pulse" />
+            <div className="h-4 w-full rounded bg-slate-100 animate-pulse" />
+            <div className="h-4 w-5/6 rounded bg-slate-100 animate-pulse" />
+          </div>
+        </div>
+      )}
+
+      {rec?.status === 'error' && (
+        <div className="bg-white border border-red-200 rounded-xl shadow-sm p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <p className="text-sm text-red-700">{rec.error}</p>
+          <button
+            onClick={() => loadRecommendation(selectedCase.caseId, { force: true })}
+            className="shrink-0 border border-red-200 text-red-700 text-sm font-medium px-4 py-2 rounded-lg hover:bg-red-50"
+          >
+            Try again
+          </button>
+        </div>
+      )}
+
+      {rec?.status === 'done' && (() => {
+        const r = rec.data;
+        const risk = RISK_COLORS[r.risk_level] || RISK_COLORS.Moderate;
+        return (
       <motion.div
         variants={listVariants}
         initial="hidden"
@@ -281,19 +302,33 @@ export default function Reports() {
                 <ScalesIcon />
               </div>
               <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-widest text-[#94a3b8] mb-2">AI recommendation</p>
                 <h2 className="text-[#0f172a] text-2xl font-bold leading-8 mb-4">
-                  {selectedCase.punishment}
+                  {r.recommended_action}
                 </h2>
-                <p className="text-[#64748b] text-sm leading-6 mb-6 max-w-[611px]">
-                  Based on the analysis of the incident report, severity of the offense ({selectedCase.offense}),
-                  and the student's prior disciplinary history, the system recommends this punishment.
-                </p>
-                <div className="flex gap-3">
-                  <button className="flex items-center gap-2 bg-[#3d3793] text-white text-sm font-bold px-5 py-2.5 rounded-lg hover:bg-[#162d6b] transition-colors shadow-sm">
-                    <CheckCircleIcon /> Confirm & Apply
+                <p className="text-[#64748b] text-sm leading-6 mb-5 max-w-[611px]">{r.summary}</p>
+                {r.additional_measures.length > 0 && (
+                  <ul className="mb-5 space-y-1">
+                    {r.additional_measures.map((m) => (
+                      <li key={m} className="text-sm text-[#334155] flex gap-2"><span className="text-[#94a3b8]">•</span>{m}</li>
+                    ))}
+                  </ul>
+                )}
+                {r.threshold_warning && (
+                  <p className="mb-5 text-sm text-[#b45309] bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">{r.threshold_warning}</p>
+                )}
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    onClick={() => navigate(`/cases/${selectedCase.caseId}`)}
+                    className="flex items-center gap-2 bg-[#3d3793] text-white text-sm font-bold px-5 py-2.5 rounded-lg hover:bg-[#162d6b] transition-colors shadow-sm"
+                  >
+                    <CheckCircleIcon /> Open Case to Decide
                   </button>
-                  <button className="flex items-center gap-2 border border-[#e2e8f0] text-[#64748b] text-sm font-medium px-5 py-2.5 rounded-lg hover:border-[#3d3793] hover:text-[#3d3793] transition-colors">
-                    <EditIcon /> Modify Action
+                  <button
+                    onClick={() => loadRecommendation(selectedCase.caseId, { force: true })}
+                    className="flex items-center gap-2 border border-[#e2e8f0] text-[#64748b] text-sm font-medium px-5 py-2.5 rounded-lg hover:border-[#3d3793] hover:text-[#3d3793] transition-colors"
+                  >
+                    <EditIcon /> Regenerate
                   </button>
                 </div>
               </div>
@@ -305,23 +340,41 @@ export default function Reports() {
               <GridIcon />
               Contributing Factors
             </h3>
-            <div className="flex flex-col gap-4">
-              {FACTORS.map(({ Icon, bg, border, title, detail }) => (
-                <div
-                  key={title}
-                  className={`flex gap-4 p-4 rounded-xl border ${bg} ${border}`}
-                >
-                  <div className="w-[22px] shrink-0 flex items-start justify-center pt-0.5">
-                    <Icon />
-                  </div>
-                  <div>
-                    <p className="text-[#0f172a] text-sm font-semibold mb-1">{title}</p>
-                    <p className="text-[#64748b] text-sm leading-5">{detail}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
+            {r.factors.length === 0 ? (
+              <p className="text-sm text-[#64748b]">No specific factors were given.</p>
+            ) : (
+              <div className="flex flex-col gap-4">
+                {r.factors.map((f, index) => {
+                  const style = FACTOR_STYLES[f.type] || FACTOR_STYLES.policy;
+                  const Icon = style.Icon;
+                  return (
+                    <div key={`${f.title}-${index}`} className={`flex gap-4 p-4 rounded-xl border ${style.bg} ${style.border}`}>
+                      <div className="w-[22px] shrink-0 flex items-start justify-center pt-0.5">
+                        <Icon />
+                      </div>
+                      <div>
+                        <p className="text-[#0f172a] text-sm font-semibold mb-1">
+                          {f.title} <span className="ml-1 text-xs font-medium text-[#94a3b8]">{style.label}</span>
+                        </p>
+                        <p className="text-[#64748b] text-sm leading-5">{f.detail}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
+
+          {r.policy_references.length > 0 && (
+            <div className="bg-white border border-[#e2e8f0] rounded-xl shadow-sm p-8">
+              <h3 className="text-[#0f172a] text-lg font-bold mb-4">Policy References</h3>
+              <ul className="space-y-2">
+                {r.policy_references.map((ref) => (
+                  <li key={ref} className="text-sm text-[#475569] border-l-2 border-[#3d3793]/40 pl-3">{ref}</li>
+                ))}
+              </ul>
+            </div>
+          )}
         </motion.div>
 
         <motion.div variants={itemVariants} className="w-full lg:w-[368px] lg:shrink-0 flex flex-col gap-4">
@@ -330,27 +383,55 @@ export default function Reports() {
             <p className="text-[#64748b] text-xs font-semibold uppercase tracking-widest text-center mb-1">
               Severity Score
             </p>
-            <SeverityGauge score={selectedCase.score} />
+            <SeverityGauge score={r.severity_score} />
           </div>
 
           {/* Risk Level */}
-          <div className={`bg-white border-y border-r border-l-4 ${selectedCase.score >= 75 ? 'border-l-[#ef4444]' : selectedCase.score >= 45 ? 'border-l-[#f97316]' : 'border-l-[#22c55e]'} rounded-xl shadow-sm px-6 py-5 border-y-[#e2e8f0] border-r-[#e2e8f0]`}>
+          <div className={`bg-white border-y border-r border-l-4 ${risk.border} rounded-xl shadow-sm px-6 py-5 border-y-[#e2e8f0] border-r-[#e2e8f0]`}>
             <p className="text-[#94a3b8] text-xs font-semibold uppercase tracking-widest mb-2">
               Risk Level
             </p>
             <div className="flex items-center gap-3 mb-2">
-              <span className={`text-2xl font-bold leading-none ${selectedCase.score >= 75 ? 'text-[#ef4444]' : selectedCase.score >= 45 ? 'text-[#f97316]' : 'text-[#22c55e]'}`}>
-                {selectedCase.risk}
-              </span>
-              {selectedCase.score >= 75 && <UpTrendIcon />}
+              <span className={`text-2xl font-bold leading-none ${risk.text}`}>{r.risk_level}</span>
+              {(r.risk_level === 'High' || r.risk_level === 'Critical') && <UpTrendIcon />}
             </div>
-            <p className="text-[#94a3b8] text-xs">
-              {selectedCase.score >= 75 ? "Requires immediate DAC attention." : "Standard review procedures apply."}
+            <p className="text-[#94a3b8] text-xs">Confidence: {r.confidence}</p>
+          </div>
+
+          <div className="bg-white border border-[#e2e8f0] rounded-xl shadow-sm px-6 py-5 space-y-3">
+            <p className="text-[#94a3b8] text-xs font-semibold uppercase tracking-widest">Penalty</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <p className="text-2xl font-bold text-[#0f172a] tabular-nums">{r.penalty_points}</p>
+                <p className="text-xs text-[#64748b]">points{r.dac_level ? ` · Level ${r.dac_level}` : ''}</p>
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-[#0f172a] tabular-nums">₹{Number(r.fine).toLocaleString('en-IN')}</p>
+                <p className="text-xs text-[#64748b]">fine</p>
+              </div>
+            </div>
+            <p className="text-xs text-[#64748b] border-t border-[#f1f5f9] pt-3">
+              Earlier cases: {r.prior_cases} · points already awarded: {r.prior_points} · after this case: {r.points_after_case}
             </p>
           </div>
 
+          {r.missing_information.length > 0 && (
+            <div className="bg-white border border-[#e2e8f0] rounded-xl shadow-sm px-6 py-5">
+              <p className="text-[#94a3b8] text-xs font-semibold uppercase tracking-widest mb-2">Missing information</p>
+              <ul className="space-y-1">
+                {r.missing_information.map((m) => <li key={m} className="text-sm text-[#475569]">• {m}</li>)}
+              </ul>
+            </div>
+          )}
+
+          <p className="text-[11px] text-[#94a3b8] leading-relaxed px-1">
+            Generated by AI ({r.model}) from the case, the student&apos;s history, the DAC &amp; Unfair Means policies
+            and the admin rules. Advisory only: the Committee makes the final decision.
+          </p>
         </motion.div>
       </motion.div>
+        );
+      })()}
     </motion.div>
   );
 
@@ -362,8 +443,25 @@ export default function Reports() {
       className="max-w-[1152px] mx-auto"
     >
       <div className="mb-6">
-        <PageHeader title="AI Case Recommendations" subtitle="Select a case to view its AI-generated penalty recommendation." />
+        <PageHeader title="AI Case Recommendations" subtitle="Cases forwarded by the DSW for the committee's final decision. Select one to get an AI penalty recommendation." />
       </div>
+
+      <div className="relative mb-5 max-w-md">
+        <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[#94a3b8] text-[20px]">search</span>
+        <input
+          type="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search by student name, enrollment no., case ID or offence"
+          aria-label="Search cases"
+          className="w-full rounded-lg border border-[#e2e8f0] bg-white pl-10 pr-3 py-2.5 text-sm text-[#0f172a] placeholder:text-[#94a3b8] focus:outline-none focus:border-[#3d3793] focus:ring-1 focus:ring-[#3d3793]"
+        />
+      </div>
+      {!loading && !error && pageCases.length === 0 && (
+        <p className="text-sm text-[#64748b] mb-4">
+          {search.trim() ? <>No cases match &ldquo;{search.trim()}&rdquo;.</> : 'No cases are waiting for the committee decision.'}
+        </p>
+      )}
 
       {loading && <p className="text-[#64748b] text-sm mb-4">Loading...</p>}
       {!!error && <p className="text-sm text-red-600 mb-4">Error: {error}</p>}
@@ -374,11 +472,11 @@ export default function Reports() {
         animate="visible"
         className="flex flex-col gap-4"
       >
-        {filteredCases.slice(page * REPORTS_PAGE_SIZE, (page + 1) * REPORTS_PAGE_SIZE).map((c) => (
+        {pageCases.map((c) => (
           <motion.div
             key={c.id}
             variants={itemVariants}
-            onClick={() => setSelectedCase(c)}
+            onClick={() => openCase(c)}
             className="bg-white border border-[#e2e8f0] rounded-xl shadow-sm p-6 flex flex-col md:flex-row md:items-center justify-between gap-6 cursor-pointer hover:border-[#3d3793] hover:shadow-md transition-all group"
           >
             <div className="flex items-center gap-5">
@@ -414,17 +512,17 @@ export default function Reports() {
       {/* Render one page at a time: thousands of animated rows freeze the browser. */}
       <div className="flex items-center justify-between mt-6 text-sm text-slate-500">
         <span className="tabular-nums">
-          {filteredCases.length ? page * REPORTS_PAGE_SIZE + 1 : 0}–{Math.min((page + 1) * REPORTS_PAGE_SIZE, filteredCases.length)} of{' '}
-          {filteredCases.length.toLocaleString('en-IN')} cases
+          {total ? page * REPORTS_PAGE_SIZE + 1 : 0}–{Math.min((page + 1) * REPORTS_PAGE_SIZE, total)} of{' '}
+          {total.toLocaleString('en-IN')} cases
         </span>
         <div className="flex gap-2">
-          <Button variant="outline" disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>
+          <Button variant="outline" disabled={page === 0} onClick={() => setPage(Math.max(0, page - 1))}>
             Previous
           </Button>
           <Button
             variant="outline"
-            disabled={(page + 1) * REPORTS_PAGE_SIZE >= filteredCases.length}
-            onClick={() => setPage((p) => p + 1)}
+            disabled={(page + 1) * REPORTS_PAGE_SIZE >= total}
+            onClick={() => setPage(page + 1)}
           >
             Next
           </Button>
@@ -434,7 +532,7 @@ export default function Reports() {
   );
 
   return (
-    <DACLayout searchValue={search} onSearchChange={(value) => { setSearch(value); setPage(0); }}>
+    <DACLayout searchValue={search} onSearchChange={setSearch}>
       <div className="font-inter">
         <AnimatePresence mode="wait">
           {selectedCase ? (

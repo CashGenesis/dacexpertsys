@@ -3,7 +3,7 @@ import {
   createRuleService,
   updateRuleService,
   deleteRuleService,
-  seedRulesService,
+  loadDacPolicyRulesService,
 } from '../services/rules.service.js';
 
 export async function getRulesController(req, res) {
@@ -69,17 +69,12 @@ export async function deleteRuleController(req, res) {
   }
 }
 
-export async function seedRulesController(req, res) {
+export async function loadDacPolicyRulesController(req, res) {
   try {
-    const { rules, force } = req.body || {};
-    if (!Array.isArray(rules)) {
-      return res.status(400).json({ error: 'rules array is required' });
-    }
-
-    const result = await seedRulesService(rules, { force: Boolean(force) });
+    const result = await loadDacPolicyRulesService({ replace: Boolean(req.body?.replace) });
     return res.status(200).json(result);
   } catch (error) {
-    console.error('Error seeding rules:', error);
-    return res.status(500).json({ error: 'Failed to seed rules' });
+    console.error('Error loading DAC policy rules:', error);
+    return res.status(500).json({ error: 'Failed to load DAC policy rules' });
   }
 }

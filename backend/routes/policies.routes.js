@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import pool from '../config/db.js';
+import { DAC_POLICY, UNFAIR_MEANS_POLICY } from '../config/dacPolicy.js';
 
 const router = Router();
 
@@ -17,6 +18,11 @@ router.get('/', async (req, res) => {
     console.error('Error fetching policies:', error);
     return res.status(500).json({ error: 'Failed to fetch policies' });
   }
+});
+
+// Structured official policies (DAC Policy v2 + Unfair Means Policy) for the student policy page.
+router.get('/dac', (req, res) => {
+  res.status(200).json({ dac: DAC_POLICY, unfairMeans: UNFAIR_MEANS_POLICY });
 });
 
 export default router;

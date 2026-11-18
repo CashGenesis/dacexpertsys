@@ -91,6 +91,10 @@ CREATE TABLE IF NOT EXISTS cases (
     resolved_by INT REFERENCES users(id),
     resolved_by_role user_role,
     resolved_at TIMESTAMP,
+    -- 'warning' when a reviewer closed the case by warning the student; NULL for a normal decision.
+    resolution_type TEXT,
+    -- Shared by the separate cases registered together as one group incident (e.g. GRP-2026-1A2B3C4D).
+    incident_group_id TEXT,
     severity_score FLOAT,
     evidence_url TEXT,
     created_at TIMESTAMP DEFAULT NOW(),
@@ -171,6 +175,11 @@ CREATE INDEX IF NOT EXISTS cases_offense_type_idx ON cases(offense_type);
 CREATE INDEX IF NOT EXISTS cases_substance_type_idx ON cases(substance_type);
 CREATE INDEX IF NOT EXISTS cases_status_idx ON cases(status);
 CREATE INDEX IF NOT EXISTS cases_incident_date_idx ON cases(incident_date);
+CREATE INDEX IF NOT EXISTS cases_created_by_idx ON cases(created_by);
+CREATE INDEX IF NOT EXISTS cases_incident_group_id_idx ON cases(incident_group_id) WHERE incident_group_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS case_timeline_case_id_idx ON case_timeline(case_id);
+CREATE INDEX IF NOT EXISTS evidence_case_id_idx ON evidence(case_id);
+CREATE INDEX IF NOT EXISTS notifications_user_id_idx ON notifications(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS case_timeline_external_case_id_idx ON case_timeline(external_case_id);
 
 CREATE INDEX IF NOT EXISTS rag_documents_source_idx ON rag_documents(source);
@@ -193,3 +202,19 @@ BEGIN
     END;
   END IF;
 END $$;
+
+-- In-person DAC meetings the Admin schedules with the student (case detail -> Send meeting reminder).
+CREATE TABLE IF NOT EXISTS case_meetings (
+    id SERIAL PRIMARY KEY,
+    case_id INT NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+    student_id INT NOT NULL REFERENCES users(id),
+    scheduled_at TIMESTAMPTZ NOT NULL,
+    location TEXT NOT NULL,
+    notes TEXT,
+    created_by INT REFERENCES users(id),
+    email_sent BOOLEAN NOT NULL DEFAULT FALSE,
+    email_status TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS case_meetings_case_id_idx ON case_meetings(case_id);
+CREATE INDEX IF NOT EXISTS case_meetings_student_idx ON case_meetings(student_id, scheduled_at);

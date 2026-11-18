@@ -100,7 +100,7 @@ export function matchesFilter(c, filter, myStage) {
   if (filter === 'active') return ACTIVE_STATUSES.includes(c.status);
   if (filter === 'mine') return c.status === myStage;
   if (filter === 'resolved') return c.status === 'resolved';
-  if (filter === 'severe') return c.severity === 'high' || c.severity === 'critical';
+  if (filter === 'severe') return (c.severity === 'high' || c.severity === 'critical') && c.status !== 'resolved';
   return true;
 }
 

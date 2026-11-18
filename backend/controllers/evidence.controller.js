@@ -7,6 +7,7 @@ import {
   attachEvidenceToCaseService,
 } from '../services/evidence.service.js';
 import { getCaseByIdService } from '../services/cases.service.js';
+import { resolveEvidenceUrl, uploadEvidenceFile } from '../services/storage.service.js';
 
 export async function getEvidenceController(req, res) {
   try {
@@ -40,13 +41,19 @@ export async function getEvidenceByIdController(req, res) {
 
 export async function uploadEvidenceController(req, res) {
   try {
-    const caseId = Number(req.body?.case_id || req.query?.case_id);
-    if (!caseId) {
+    // case_id for one case, or case_ids ("12,13,14") for a group incident: the file is
+    // stored once and attached to every listed case.
+    const rawIds = req.body?.case_ids || req.query?.case_ids || req.body?.case_id || req.query?.case_id || '';
+    const caseIds = [...new Set(String(rawIds).split(',').map((v) => Number(v.trim())).filter(Boolean))];
+    if (!caseIds.length) {
       return res.status(400).json({ error: 'case_id is required' });
     }
+    if (caseIds.length > 50) {
+      return res.status(400).json({ error: 'Evidence can be attached to at most 50 cases at once' });
+    }
 
-    const existingCase = await getCaseByIdService(caseId);
-    if (!existingCase) {
+    const existing = await Promise.all(caseIds.map((id) => getCaseByIdService(id)));
+    if (existing.some((c) => !c)) {
       return res.status(404).json({ error: 'Case not found' });
     }
 
@@ -54,26 +61,82 @@ export async function uploadEvidenceController(req, res) {
       return res.status(400).json({ error: 'Evidence file is required' });
     }
 
-    const fileUrl = `/uploads/evidence/${req.file.filename}`;
-    const evidence = await createEvidenceService({
-      caseId,
-      fileUrl,
-      fileType: req.file.mimetype,
-      uploadedBy: Number(req.user?.sub) || null,
+    // Stored reference: "supabase://<bucket>/cases/<first case id>/<file>" (private bucket).
+    const fileUrl = await uploadEvidenceFile({
+      caseId: caseIds[0],
+      buffer: req.file.buffer,
+      mimeType: req.file.mimetype,
+      extension: req.file.extension || '',
+      randomId: req.file.randomId,
     });
 
-    await attachEvidenceToCaseService(caseId, fileUrl);
+    const evidenceRows = [];
+    for (const caseId of caseIds) {
+      evidenceRows.push(await createEvidenceService({
+        caseId,
+        fileUrl,
+        fileType: req.file.mimetype,
+        uploadedBy: Number(req.user?.sub) || null,
+      }));
+      await attachEvidenceToCaseService(caseId, fileUrl);
+    }
 
     return res.status(201).json({
-      evidence,
+      evidence: evidenceRows[0],
+      evidenceCount: evidenceRows.length,
       fileUrl,
       fileName: req.file.originalname,
       mimeType: req.file.mimetype,
       size: req.file.size,
     });
   } catch (error) {
+    if (error?.message === 'STORAGE_NOT_CONFIGURED') {
+      return res.status(503).json({
+        error: 'Evidence storage is not configured. Set SUPABASE_URL and SUPABASE_SECRET_KEY in .env.',
+      });
+    }
     console.error('Evidence upload error:', error);
-    return res.status(500).json({ error: 'Failed to upload evidence' });
+    const details = error?.code === 'STORAGE_UPLOAD_FAILED' ? error.message : undefined;
+    return res.status(500).json({ error: 'Failed to upload evidence', details });
+  }
+}
+
+// GET /api/cases/:id/evidence — the case's evidence files with links the browser can open.
+// Staff may view any case; students only their own. Supabase links expire after 10 minutes.
+export async function getCaseEvidenceController(req, res) {
+  try {
+    const caseId = Number(req.params.id);
+    if (!caseId) {
+      return res.status(400).json({ error: 'A valid case id is required' });
+    }
+
+    const caseItem = await getCaseByIdService(caseId);
+    const isOtherStudentsCase = String(req.user?.role || '').toLowerCase() === 'student'
+      && Number(caseItem?.student_id) !== Number(req.user?.sub);
+    if (!caseItem || isOtherStudentsCase) {
+      return res.status(404).json({ error: 'Case not found' });
+    }
+
+    const backendOrigin = `${req.protocol}://${req.get('host')}`;
+    const rows = await getEvidenceService({ caseId });
+
+    // Older cases may only have cases.evidence_url without an evidence row.
+    if (!rows.length && caseItem.evidence_url) {
+      rows.push({ id: null, case_id: caseId, file_url: caseItem.evidence_url, file_type: null, created_at: caseItem.created_at });
+    }
+
+    const items = await Promise.all(rows.map(async (row) => ({
+      id: row.id,
+      file_type: row.file_type,
+      created_at: row.created_at,
+      name: String(row.file_url || '').split('/').pop() || 'Evidence',
+      url: await resolveEvidenceUrl(row.file_url, backendOrigin),
+    })));
+
+    return res.status(200).json(items);
+  } catch (error) {
+    console.error('Error fetching case evidence:', error);
+    return res.status(500).json({ error: 'Failed to fetch case evidence' });
   }
 }
 

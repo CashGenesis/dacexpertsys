@@ -1,9 +1,11 @@
+import crypto from 'crypto';
 import pool from '../config/db.js';
 import {
   createNotificationsForRoleService,
   createNotificationService,
 } from './notifications.service.js';
 import { createCaseTimelineService } from './timeline.service.js';
+import { isEmailConfigured, renderEmailTemplate, sendEmail } from './email.service.js';
 
 // Student details live in users; cases only store student_id.
 const CASE_WITH_STUDENT_SELECT = `
@@ -63,7 +65,35 @@ function getNextWorkflowState(role) {
   return null;
 }
 
-export async function getAllCasesService({ requesterRole, requesterId, role, status }) {
+// Columns the case lists, dashboards and reports display. Long text fields
+// (description, notes, decision, ...) are only sent by GET /api/cases/:id.
+const CASE_LIST_SELECT = `
+  SELECT
+    cases.id,
+    cases.external_case_id,
+    cases.student_id,
+    cases.offense_type,
+    cases.severity,
+    cases.status,
+    cases.incident_date,
+    cases.created_at,
+    cases.created_by,
+    cases.penalty_points,
+    cases.severity_score,
+    users.name AS student_name,
+    users.enrollment_no
+  FROM cases
+  JOIN users ON users.id = cases.student_id
+`;
+
+const CASE_LIST_ORDER = 'ORDER BY cases.incident_date DESC NULLS LAST, cases.created_at DESC, cases.id DESC';
+
+// Workflow stage each reviewer acts on (matches STAGE_FOR_ROLE in the frontend).
+const STAGE_FOR_ROLE = { chief_warden: 'pending_chief', dsw: 'pending_dsw', admin: 'pending_admin' };
+
+// Row-visibility rules per requester role. Shared by the list, page and summary queries
+// so that every view counts exactly the cases the requester may see.
+function buildCaseScope({ requesterRole, requesterId, role, status }) {
   const conditions = [];
   const values = [];
 
@@ -73,8 +103,11 @@ export async function getAllCasesService({ requesterRole, requesterId, role, sta
   } else if (requesterRole === 'warden') {
     // Wardens oversee disciplinary cases; only restrict if explicitly asked for "my_created_only"
     if (role === 'my_created_only') {
+      // Only cases this warden registered through the app. Cases registered in the app
+      // record the warden in both columns; imported seed data sets created_by but never
+      // reported_by, so it is not attributed to any warden.
       values.push(requesterId);
-      conditions.push(`cases.created_by = $${values.length}`);
+      conditions.push(`cases.created_by = $${values.length} AND cases.reported_by = $${values.length}`);
     }
   } else if (requesterRole === 'chief_warden' || requesterRole === 'admin') {
     if (role && role !== 'all' && requesterRole !== 'admin') {
@@ -96,18 +129,113 @@ export async function getAllCasesService({ requesterRole, requesterId, role, sta
     conditions.push(`cases.status = $${values.length}`);
   }
 
-  const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
-  const query = `
-    ${CASE_WITH_STUDENT_SELECT}
-    ${whereClause}
-    ORDER BY cases.incident_date DESC NULLS LAST, cases.created_at DESC
-  `;
+  return { conditions, values };
+}
 
-  const result = await pool.query(query, values);
+function whereSql(conditions) {
+  return conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+}
+
+export async function getAllCasesService(scope) {
+  const { conditions, values } = buildCaseScope(scope);
+  const result = await pool.query(`${CASE_LIST_SELECT} ${whereSql(conditions)} ${CASE_LIST_ORDER}`, values);
   return result.rows;
 }
 
-export async function createCaseService(payload, requesterId, requesterRole = 'warden') {
+// One page of cases plus the total matching count.
+// filter: 'all' | 'active' | 'mine' | 'resolved' | 'severe'; q: free-text search;
+// days: only cases registered in the last N days (omit for no time limit).
+export async function getCasesPageService({ filter = 'all', q = '', page = 0, pageSize = 10, days = null, ...scope }) {
+  const { conditions, values } = buildCaseScope(scope);
+
+  if (days) {
+    values.push(days);
+    conditions.push(`cases.created_at >= NOW() - make_interval(days => $${values.length})`);
+  }
+
+  if (filter === 'active') {
+    conditions.push("cases.status IN ('pending_chief', 'pending_dsw', 'pending_admin')");
+  } else if (filter === 'resolved') {
+    conditions.push("cases.status = 'resolved'");
+  } else if (filter === 'severe') {
+    // Only open high/critical cases: resolved ones need no attention.
+    conditions.push("cases.severity IN ('high', 'critical') AND cases.status <> 'resolved'");
+  } else if (filter === 'mine' && STAGE_FOR_ROLE[scope.requesterRole]) {
+    values.push(STAGE_FOR_ROLE[scope.requesterRole]);
+    conditions.push(`cases.status = $${values.length}`);
+  }
+
+  const term = String(q || '').trim();
+  if (term) {
+    values.push(`%${term}%`);
+    const p = `$${values.length}`;
+    conditions.push(
+      `(users.name ILIKE ${p} OR users.enrollment_no ILIKE ${p} OR cases.external_case_id ILIKE ${p} OR cases.offense_type ILIKE ${p})`
+    );
+  }
+
+  const where = whereSql(conditions);
+  const limit = Math.min(Math.max(Number(pageSize) || 10, 1), 100);
+  const offset = Math.max(Number(page) || 0, 0) * limit;
+
+  const [rowsResult, countResult] = await Promise.all([
+    pool.query(`${CASE_LIST_SELECT} ${where} ${CASE_LIST_ORDER} LIMIT ${limit} OFFSET ${offset}`, values),
+    pool.query(`SELECT COUNT(*)::int AS total FROM cases JOIN users ON users.id = cases.student_id ${where}`, values),
+  ]);
+
+  return { rows: rowsResult.rows, total: countResult.rows[0]?.total || 0 };
+}
+
+// Dashboard numbers computed in SQL: counts per status, high/critical count,
+// daily counts for the trend chart (last ~13 months) and the side-panel queue.
+export async function getCasesSummaryService(scope) {
+  const { conditions, values } = buildCaseScope(scope);
+  const where = whereSql(conditions);
+  const caseDate = 'COALESCE(cases.incident_date, cases.created_at::date)';
+
+  const stage = STAGE_FOR_ROLE[scope.requesterRole];
+  const queueValues = [...values];
+  let queueSql;
+  if (stage) {
+    queueValues.push(stage);
+    queueSql = `${CASE_LIST_SELECT} ${whereSql([...conditions, `cases.status = $${queueValues.length}`])}
+      ORDER BY ${caseDate} ASC, cases.id ASC LIMIT 4`;
+  } else {
+    queueSql = `${CASE_LIST_SELECT} ${where} ORDER BY ${caseDate} DESC, cases.id DESC LIMIT 4`;
+  }
+
+  const [statusResult, trendResult, queueResult] = await Promise.all([
+    pool.query(
+      `SELECT cases.status::text AS status,
+              COUNT(*)::int AS count,
+              COUNT(*) FILTER (WHERE cases.severity IN ('high', 'critical') AND cases.status <> 'resolved')::int AS severe
+       FROM cases ${where}
+       GROUP BY cases.status`,
+      values
+    ),
+    pool.query(
+      `SELECT to_char(${caseDate}, 'YYYY-MM-DD') AS day, COUNT(*)::int AS count
+       FROM cases ${whereSql([...conditions, `${caseDate} >= CURRENT_DATE - 400`])}
+       GROUP BY 1`,
+      values
+    ),
+    pool.query(queueSql, queueValues),
+  ]);
+
+  const byStatus = { pending_chief: 0, pending_dsw: 0, pending_admin: 0, resolved: 0 };
+  let severe = 0;
+  for (const row of statusResult.rows) {
+    if (row.status in byStatus) byStatus[row.status] = row.count;
+    severe += row.severe;
+  }
+  const total = statusResult.rows.reduce((sum, row) => sum + row.count, 0);
+
+  return { total, severe, byStatus, trend: trendResult.rows, queue: queueResult.rows };
+}
+
+// Inserts one case inside an open transaction: gives it a public DAC-<year>-<id> number,
+// notifies the chief wardens and writes the first timeline entry.
+async function insertCaseWithClient(client, payload, requesterId, requesterRole, { groupSize = 0 } = {}) {
   const {
     student_id: studentId,
     offense_type: offenseType,
@@ -117,11 +245,13 @@ export async function createCaseService(payload, requesterId, requesterRole = 'w
     severity = 'low',
     penalty_points: penaltyPoints = 0,
     evidence_url: evidenceUrl = null,
+    substance_type: substanceType = null,
+    incident_time: incidentTime = null,
+    incident_location: incidentLocation = null,
+    alcohol_reading: alcoholReading = null,
+    notes = null,
+    incident_group_id: incidentGroupId = null,
   } = payload;
-
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
 
   const query = `
     INSERT INTO cases (
@@ -137,55 +267,80 @@ export async function createCaseService(payload, requesterId, requesterRole = 'w
       location,
       incident_date,
       penalty_points,
-      evidence_url
+      evidence_url,
+      substance_type,
+      incident_time,
+      incident_location,
+      alcohol_reading,
+      notes,
+      incident_group_id
     )
-    VALUES ($1, $2, $12, $3, $2, $4, $5, $6, $7, $8, $9, $10, $11)
+    VALUES ($1, $2, $12, $3, $2, $4, $5, $6, $7, $8, $9, $10, $11, $13, $14, $15, $16, $17, $18)
     RETURNING *
   `;
 
-    const values = [
-      studentId,
-      requesterId,
-      'chief_warden',
-      offenseType,
-      'pending_chief',
-      severity,
-      description,
-      location,
-      incidentDate,
-      penaltyPoints,
-      evidenceUrl,
-      requesterRole,
-    ];
-    const result = await client.query(query, values);
-    // Give app-created cases the same public ID format as imported ones: DAC-<year>-<5-digit id>.
-    const withPublicId = await client.query(
-      `UPDATE cases
-       SET external_case_id = 'DAC-' || to_char(COALESCE(incident_date, NOW()), 'YYYY') || '-' || lpad(id::text, 5, '0')
-       WHERE id = $1 AND external_case_id IS NULL
-       RETURNING *`,
-      [result.rows[0].id]
-    );
-    const createdCase = withPublicId.rows[0] || result.rows[0];
+  const values = [
+    studentId,
+    requesterId,
+    'chief_warden',
+    offenseType,
+    'pending_chief',
+    severity,
+    description,
+    location,
+    incidentDate,
+    penaltyPoints,
+    evidenceUrl,
+    requesterRole,
+    substanceType,
+    incidentTime,
+    incidentLocation,
+    alcoholReading,
+    notes,
+    incidentGroupId,
+  ];
+  const result = await client.query(query, values);
+  // Give app-created cases the same public ID format as imported ones: DAC-<year>-<5-digit id>.
+  const withPublicId = await client.query(
+    `UPDATE cases
+     SET external_case_id = 'DAC-' || to_char(COALESCE(incident_date, NOW()), 'YYYY') || '-' || lpad(id::text, 5, '0')
+     WHERE id = $1 AND external_case_id IS NULL
+     RETURNING *`,
+    [result.rows[0].id]
+  );
+  const createdCase = withPublicId.rows[0] || result.rows[0];
+  const byRole = ROLE_LABELS[requesterRole] || 'staff';
 
-    await createNotificationsForRoleService(
-      {
-        role: 'chief_warden',
-        message: `New case created by ${ROLE_LABELS[requesterRole] || 'staff'}. Click to review.`,
-        caseId: createdCase.id,
-      },
-      client,
-    );
+  await createNotificationsForRoleService(
+    {
+      role: 'chief_warden',
+      message: groupSize
+        ? `New group-incident case (${groupSize} students) created by ${byRole}. Click to review.`
+        : `New case created by ${byRole}. Click to review.`,
+      caseId: createdCase.id,
+    },
+    client,
+  );
 
-    await createCaseTimelineService(
-      {
-        caseId: createdCase.id,
-        event: 'Case created and assigned to Chief Warden.',
-        performedBy: requesterId,
-      },
-      client,
-    );
+  await createCaseTimelineService(
+    {
+      caseId: createdCase.id,
+      event: groupSize
+        ? `Case created as part of a group incident (${groupSize} students) and assigned to Chief Warden.`
+        : 'Case created and assigned to Chief Warden.',
+      performedBy: requesterId,
+    },
+    client,
+  );
 
+  return createdCase;
+}
+
+export async function createCaseService(payload, requesterId, requesterRole = 'warden') {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const createdCase = await insertCaseWithClient(client, payload, requesterId, requesterRole);
     await client.query('COMMIT');
     return createdCase;
   } catch (error) {
@@ -194,6 +349,73 @@ export async function createCaseService(payload, requesterId, requesterRole = 'w
   } finally {
     client.release();
   }
+}
+
+export const MAX_GROUP_STUDENTS = 50;
+
+// Group incident: one separate case per student, all sharing the incident details and an
+// incident_group_id. Either every case is created or none is.
+// students: [{ student_id, location?, alcohol_reading?, notes? }] — the optional fields are
+// per-student (e.g. each student's own breathalyzer reading); shared: the incident fields.
+export async function createGroupCasesService(students, shared, requesterId, requesterRole = 'warden') {
+  const ids = students.map((s) => Number(s.student_id));
+  if (ids.length < 2 || ids.length > MAX_GROUP_STUDENTS || ids.some((id) => !id) || new Set(ids).size !== ids.length) {
+    throw new Error('INVALID_GROUP');
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const found = await client.query("SELECT id FROM users WHERE id = ANY($1::int[]) AND role = 'student'", [ids]);
+    if (found.rows.length !== ids.length) {
+      throw new Error('UNKNOWN_STUDENT');
+    }
+
+    const groupId = `GRP-${new Date().getFullYear()}-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+    const created = [];
+    for (const student of students) {
+      const createdCase = await insertCaseWithClient(
+        client,
+        {
+          ...shared,
+          student_id: Number(student.student_id),
+          location: student.location ?? shared.location ?? null,
+          alcohol_reading: student.alcohol_reading !== undefined ? student.alcohol_reading : (shared.alcohol_reading ?? null),
+          notes: student.notes !== undefined ? student.notes : (shared.notes ?? null),
+          incident_group_id: groupId,
+        },
+        requesterId,
+        requesterRole,
+        { groupSize: students.length },
+      );
+      created.push(createdCase);
+    }
+
+    await client.query('COMMIT');
+    return { incident_group_id: groupId, cases: created };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+// The other cases from the same group incident (empty when the case is not part of one).
+export async function getGroupCasesService(caseId) {
+  const result = await pool.query(
+    `SELECT cases.id, cases.external_case_id, cases.status, cases.severity,
+            users.name AS student_name, users.enrollment_no
+     FROM cases
+     JOIN users ON users.id = cases.student_id
+     WHERE cases.incident_group_id IS NOT NULL
+       AND cases.incident_group_id = (SELECT incident_group_id FROM cases WHERE id = $1)
+       AND cases.id <> $1
+     ORDER BY cases.id`,
+    [caseId],
+  );
+  return result.rows;
 }
 
 export async function getCaseHistoryService({ requesterRole, requesterId, limit = 6 }) {
@@ -315,6 +537,138 @@ export async function approveCaseService(caseId, actor) {
     throw error;
   } finally {
     client.release();
+  }
+}
+
+// Closes a case at the current review stage by warning the student. Only the role the
+// case is assigned to may do this. Reviewers, the case creator and the student are notified.
+export async function warnCaseService(caseId, actor, note = null) {
+  if (!canActOnRole(actor?.role)) {
+    throw new Error('FORBIDDEN_ROLE');
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const existing = await client.query('SELECT * FROM cases WHERE id = $1 FOR UPDATE', [caseId]);
+    const currentCase = existing.rows[0];
+    if (!currentCase) {
+      throw new Error('CASE_NOT_FOUND');
+    }
+
+    if (String(currentCase.status || '').toLowerCase() === 'resolved') {
+      throw new Error('CASE_ALREADY_RESOLVED');
+    }
+
+    if (String(currentCase.assigned_to_role || '').toLowerCase() !== String(actor.role || '').toLowerCase()) {
+      throw new Error('NOT_ASSIGNED_ROLE');
+    }
+
+    const roleLabel = ROLE_LABELS[actor.role] || 'Reviewer';
+    const cleanNote = String(note || '').trim();
+    const decision = `Resolved by ${roleLabel} with a warning to the student.${cleanNote ? ` ${cleanNote}` : ''}`;
+
+    const updated = await client.query(
+      `
+      UPDATE cases
+      SET
+        status = 'resolved'::case_status,
+        assigned_to_role = NULL,
+        resolution_type = 'warning',
+        decision = $2,
+        resolved_by = $3,
+        resolved_by_role = $4::user_role,
+        resolved_at = NOW(),
+        updated_at = NOW()
+      WHERE id = $1
+      RETURNING *
+      `,
+      [caseId, decision, actor.id, actor.role],
+    );
+    const updatedCase = updated.rows[0];
+
+    const caseRef = updatedCase.external_case_id || `#${updatedCase.id}`;
+    const recipients = await client.query(
+      `SELECT id FROM users
+       WHERE (role IN ('chief_warden', 'dsw', 'admin') OR id = $1 OR id = $2)
+         AND id <> $3`,
+      [updatedCase.created_by, updatedCase.student_id, actor.id],
+    );
+    for (const row of recipients.rows) {
+      await createNotificationService(
+        {
+          userId: row.id,
+          message: `Case ${caseRef} was resolved by ${roleLabel} with a warning to the student.`,
+          caseId: updatedCase.id,
+        },
+        client,
+      );
+    }
+
+    await createCaseTimelineService(
+      {
+        caseId: updatedCase.id,
+        event: `Resolved by ${roleLabel} with a warning to the student.`,
+        performedBy: actor.id,
+      },
+      client,
+    );
+
+    await client.query('COMMIT');
+    return updatedCase;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+// Emails the student after the Admin resolves their case with DAC penalty points.
+// Called only from the Admin's final decision. Never throws; returns what happened:
+// { sent: true, to } | { sent: false, reason }.
+export async function sendDacPenaltyEmailService(caseId) {
+  try {
+    const result = await pool.query(
+      `SELECT cases.id, cases.external_case_id, cases.offense_type, cases.penalty_points, cases.fine,
+              cases.decision, cases.status, users.name AS student_name, users.email AS student_email
+       FROM cases
+       JOIN users ON users.id = cases.student_id
+       WHERE cases.id = $1`,
+      [caseId],
+    );
+    const row = result.rows[0];
+    const points = Number(row?.penalty_points || 0);
+
+    if (!row || row.status !== 'resolved') return { sent: false, reason: 'Case is not resolved' };
+    if (points <= 0) return { sent: false, reason: 'No DAC points were imposed' };
+    if (!row.student_email) return { sent: false, reason: 'Student has no email address' };
+    if (!isEmailConfigured()) return { sent: false, reason: 'Email is not configured' };
+
+    const caseRef = row.external_case_id || `#${row.id}`;
+    const fine = Number(row.fine || 0);
+    const pointsText = `${points} DAC point${points === 1 ? '' : 's'}`;
+    const paragraphs = [
+      `The Disciplinary Action Committee has concluded case ${caseRef}${row.offense_type ? ` (${row.offense_type})` : ''}. You have been given ${pointsText}.`,
+      ...(fine > 0 ? [`A fine of Rs. ${fine.toLocaleString('en-IN')} has also been imposed.`] : []),
+      ...(row.decision ? [`Decision: ${row.decision}`] : []),
+      // DAC Policy v2, rule xiv.
+      'If you wish to appeal, write to appeal.dac@bml.edu.in within a week of this decision, after paying the fine and an appeal fee of Rs. 500. Paying the fine does not cancel the penalty points.',
+    ];
+
+    const { error } = await sendEmail({
+      to: row.student_email,
+      subject: `DAC decision for case ${caseRef}: ${pointsText}`,
+      html: renderEmailTemplate({ heading: `You have been given ${pointsText}`, greetingName: row.student_name, paragraphs }),
+      text: [`Hello ${row.student_name},`, ...paragraphs].join('\n\n'),
+    });
+
+    if (error) return { sent: false, reason: error.message || 'Email provider rejected the email' };
+    return { sent: true, to: row.student_email };
+  } catch (err) {
+    console.error('DAC penalty email failed:', err?.message || err);
+    return { sent: false, reason: 'Email could not be sent' };
   }
 }
 

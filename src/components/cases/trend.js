@@ -36,11 +36,12 @@ export function buildTrend(cases, range) {
     }
   }
   const counts = buckets.map(() => 0);
+  // Items are cases ({ date }) or pre-aggregated daily counts ({ date, count }).
   for (const c of cases) {
     if (!c.date) continue;
     const t = startOfDay(c.date).getTime();
     const idx = buckets.findIndex((b) => t >= b.start.getTime() && t < b.end.getTime());
-    if (idx !== -1) counts[idx] += 1;
+    if (idx !== -1) counts[idx] += c.count ?? 1;
   }
   return buckets.map((b, i) => ({ label: b.label, value: counts[i] }));
 }

@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import DACLayout from '../components/layout/DACLayout';
 import CasesTable from '../components/cases/CasesTable';
 import { PageHeader } from '../components/cases/parts';
-import { STAGE_FOR_ROLE, mapCase, matchesFilter, searchCases } from '../components/cases/caseUi';
+import { STAGE_FOR_ROLE } from '../components/cases/caseUi';
 import { useAuth } from '../context/AuthContext';
-import { getCases } from '../services/api';
+import { usePagedCases } from '../hooks/usePagedCases';
 
 const PAGE_COPY = {
   warden: { title: 'My Cases', subtitle: 'Cases you registered and their current stage.', query: { role: 'my_created_only' } },
@@ -21,25 +21,13 @@ export default function CaseList() {
   const [searchParams] = useSearchParams();
   const [search, setSearch] = useState(() => searchParams.get('q') || '');
   const [filter, setFilter] = useState(myStage ? 'mine' : 'all');
-  const [cases, setCases] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    let mounted = true;
-    getCases(copy.query)
-      .then((rows) => mounted && setCases(rows.map(mapCase)))
-      .catch((loadError) => mounted && setError(loadError?.message || 'Failed to load cases.'))
-      .finally(() => mounted && setLoading(false));
-    return () => {
-      mounted = false;
-    };
-  }, [copy]);
-
-  const visible = useMemo(
-    () => searchCases(cases.filter((c) => matchesFilter(c, filter, myStage)), search),
-    [cases, filter, myStage, search]
-  );
+  // Filtering, search and paging run on the server; only the visible page is downloaded.
+  const { rows, total, page, setPage, loading, error } = usePagedCases({
+    query: copy.query,
+    filter,
+    search,
+    pageSize: 10,
+  });
 
   const tabs = [
     ...(myStage ? [{ key: 'mine', label: 'Awaiting You' }] : []),
@@ -55,8 +43,10 @@ export default function CaseList() {
         <PageHeader title={copy.title} subtitle={copy.subtitle} />
         {error && <p className="text-sm text-rose-700 bg-rose-50 border border-rose-100 rounded-xl px-4 py-3">{error}</p>}
         <CasesTable
-          key={`${filter}|${search}`}
-          cases={visible}
+          cases={rows}
+          total={total}
+          page={page}
+          onPageChange={setPage}
           loading={loading}
           role={role}
           title={search.trim() ? `Results for “${search.trim()}”` : 'Cases'}

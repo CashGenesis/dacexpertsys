@@ -48,9 +48,10 @@ const NAV_ITEMS = {
 const REGISTER_LINKS = {
   warden: '/warden/register',
   chief_warden: '/chief-warden/register',
-  dsw: '/register-case',
-  admin: '/register-case',
 };
+
+// Roles that get the top-bar "Ask AI" button. Only wardens and chief wardens register cases.
+const STAFF_ROLES = ['warden', 'chief_warden', 'dsw', 'admin'];
 
 const CASE_LIST_LINKS = {
   warden: '/warden/cases',
@@ -205,7 +206,8 @@ export default function DACLayout({ children, searchValue, onSearchChange, searc
   const navigate = useNavigate();
   const { role } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const isStaff = role in REGISTER_LINKS;
+  const isStaff = STAFF_ROLES.includes(role);
+  const registerLink = REGISTER_LINKS[role];
 
   const handleSearchSubmit = (term) => {
     if (term) navigate(`${CASE_LIST_LINKS[role] || '/dashboard'}?q=${encodeURIComponent(term)}`);
@@ -250,13 +252,15 @@ export default function DACLayout({ children, searchValue, onSearchChange, searc
               <NotificationBell />
               {isStaff && (
                 <>
-                  <Link
-                    to={REGISTER_LINKS[role]}
-                    className="inline-flex items-center gap-1.5 h-10 px-4 rounded-lg bg-[#231f52] hover:bg-[#2f2a6b] text-white text-sm font-medium transition-colors"
-                  >
-                    <span className="material-symbols-outlined text-[20px]">add</span>
-                    <span className="hidden sm:inline">Register Case</span>
-                  </Link>
+                  {registerLink && (
+                    <Link
+                      to={registerLink}
+                      className="inline-flex items-center gap-1.5 h-10 px-4 rounded-lg bg-[#231f52] hover:bg-[#2f2a6b] text-white text-sm font-medium transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-[20px]">add</span>
+                      <span className="hidden sm:inline">Register Case</span>
+                    </Link>
+                  )}
                   <button
                     type="button"
                     onClick={toggleAssistant}

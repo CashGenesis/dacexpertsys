@@ -94,6 +94,23 @@ export async function createCase(payload) {
   });
 }
 
+/**
+ * Group incident: one separate case per student, sharing the incident details.
+ * payload: { students: [{ student_id, location }], offense_type, ...shared fields }
+ * Returns { incident_group_id, cases: [case, ...] }.
+ */
+export async function createGroupCases(payload) {
+  return fetchJson('/api/cases/group', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+/** Other cases from the same group incident (staff only). */
+export async function getGroupCases(caseId) {
+  return fetchJson(`/api/cases/${caseId}/group`);
+}
+
 export async function getCaseById(caseId) {
   return fetchJson(`/api/cases/${caseId}`);
 }
@@ -118,7 +135,10 @@ export async function deleteCase(caseId) {
 export async function uploadEvidence(file, options = {}) {
   const formData = new FormData();
   formData.append('file', file);
-  if (options.caseId) {
+  if (Array.isArray(options.caseIds) && options.caseIds.length) {
+    // Group incident: one stored file attached to every case.
+    formData.append('case_ids', options.caseIds.join(','));
+  } else if (options.caseId) {
     formData.append('case_id', String(options.caseId));
   }
 
@@ -144,9 +164,44 @@ export async function uploadEvidence(file, options = {}) {
   return response.json();
 }
 
+/** A case's evidence files: [{ id, name, file_type, created_at, url }]. Supabase links expire after 10 minutes. */
+export async function getCaseEvidence(caseId) {
+  return fetchJson(`/api/cases/${caseId}/evidence`);
+}
+
 export async function approveCase(caseId) {
   return fetchJson(`/api/cases/${caseId}/approve`, {
     method: 'PUT',
+  });
+}
+
+/** Admin: schedule an in-person DAC meeting. payload: { scheduled_at (ISO), location, notes }. */
+export async function scheduleCaseMeeting(caseId, payload) {
+  return fetchJson(`/api/cases/${caseId}/meetings`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+/** Meetings scheduled for one case (newest first). */
+export async function getCaseMeetings(caseId) {
+  return fetchJson(`/api/cases/${caseId}/meetings`);
+}
+
+/** Student: their own DAC meetings (upcoming first). */
+export async function getMyMeetings() {
+  return fetchJson('/api/cases/meetings/mine');
+}
+
+/** AI penalty recommendation for one case (Groq). Advisory only; nothing is saved. */
+export async function getCaseRecommendation(caseId) {
+  return fetchJson(`/api/cases/${caseId}/recommendation`, { method: 'POST' });
+}
+
+export async function warnCase(caseId, note = '') {
+  return fetchJson(`/api/cases/${caseId}/warn`, {
+    method: 'PUT',
+    body: JSON.stringify({ note }),
   });
 }
 
@@ -186,6 +241,27 @@ export async function getCases(filters = {}) {
   return fetchJson(`/api/cases${queryString ? `?${queryString}` : ''}`);
 }
 
+function toQueryString(params = {}) {
+  const search = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') {
+      search.set(key, String(value));
+    }
+  });
+  const query = search.toString();
+  return query ? `?${query}` : '';
+}
+
+/** One page of cases: { rows, total }. params: page, pageSize, filter, q, role, status. */
+export async function getCasesPage(params = {}) {
+  return fetchJson(`/api/cases${toQueryString({ page: 0, ...params })}`);
+}
+
+/** Dashboard numbers: { total, severe, byStatus, trend: [{ day, count }], queue }. */
+export async function getCasesSummary(params = {}) {
+  return fetchJson(`/api/cases/summary${toQueryString(params)}`);
+}
+
 export async function getCaseHistory(limit = 6) {
   return fetchJson(`/api/cases/history?limit=${encodeURIComponent(limit)}`);
 }
@@ -196,6 +272,14 @@ export async function getStudentHistory(enrollmentNo, filters = {}) {
   if (filters.substanceType) params.set('substance_type', filters.substanceType);
   const query = params.toString();
   return fetchJson(`/api/cases/student/${encodeURIComponent(enrollmentNo)}${query ? `?${query}` : ''}`);
+}
+
+/** Translates Hindi (or Hinglish) text to English on the backend: { translation }. */
+export async function translateHindiToEnglish(text) {
+  return fetchJson('/api/translate/hi-en', {
+    method: 'POST',
+    body: JSON.stringify({ text }),
+  });
 }
 
 export async function askChatbot(message, conversationId = null) {
@@ -285,13 +369,6 @@ export async function deleteRule(ruleId) {
   });
 }
 
-export async function seedRules(payload) {
-  return fetchJson('/api/rules/seed', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
-}
-
 export async function createUser(payload) {
   return fetchJson('/api/users', {
     method: 'POST',
@@ -320,6 +397,24 @@ export async function getMe() {
   return fetchJson('/api/users/me');
 }
 
+/** Admin only: sends a test email to EMAIL_TEST_TO (set in the backend .env). */
+export async function sendTestEmail() {
+  return fetchJson('/api/email/test', { method: 'POST' });
+}
+
 export async function getPolicies() {
   return fetchJson('/api/policies');
+}
+
+/** Official policies from the signed PDFs: { dac, unfairMeans }. */
+export async function getDacPolicy() {
+  return fetchJson('/api/policies/dac');
+}
+
+/** Admin: adds/corrects the DAC Policy v2 offences as rules. replace=true also deletes other rules. */
+export async function loadDacPolicyRules(replace = false) {
+  return fetchJson('/api/rules/load-dac-policy', {
+    method: 'POST',
+    body: JSON.stringify({ replace }),
+  });
 }

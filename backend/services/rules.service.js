@@ -1,4 +1,5 @@
 import pool from '../config/db.js';
+import { getDacPolicyRules } from '../config/dacPolicy.js';
 
 export async function getRulesService() {
   const result = await pool.query('SELECT id, question, weight, category FROM rules ORDER BY id ASC');
@@ -54,32 +55,42 @@ export async function deleteRuleService(ruleId) {
   return result.rows[0] || null;
 }
 
-export async function seedRulesService(rules, { force = false } = {}) {
+/**
+ * Loads the DAC Policy v2 offences as rules (weight = penalty points, category = level).
+ * Adds missing ones and corrects points/level of existing ones (matched by name, case-insensitive).
+ * With replace = true, rules that are not in the policy are deleted.
+ */
+export async function loadDacPolicyRulesService({ replace = false } = {}) {
+  const policyRules = getDacPolicyRules();
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-
-    const existing = await client.query('SELECT COUNT(*)::int AS count FROM rules');
-    const count = existing.rows[0]?.count || 0;
-
-    if (count > 0 && !force) {
-      await client.query('COMMIT');
-      return { seeded: false, count };
-    }
-
-    if (force) {
-      await client.query('DELETE FROM rules');
-    }
-
-    for (const rule of rules) {
-      await client.query(
-        'INSERT INTO rules (question, weight, category) VALUES ($1, $2, $3)',
-        [rule.question, rule.weight, rule.category || null],
+    let added = 0;
+    let updated = 0;
+    for (const rule of policyRules) {
+      const result = await client.query(
+        `UPDATE rules SET weight = $2, category = $3
+         WHERE LOWER(TRIM(question)) = LOWER(TRIM($1))
+         RETURNING id`,
+        [rule.question, rule.weight, rule.category],
       );
+      if (result.rowCount) {
+        updated += result.rowCount;
+      } else {
+        await client.query('INSERT INTO rules (question, weight, category) VALUES ($1, $2, $3)', [rule.question, rule.weight, rule.category]);
+        added += 1;
+      }
     }
-
+    let removed = 0;
+    if (replace) {
+      const result = await client.query(
+        'DELETE FROM rules WHERE NOT (LOWER(TRIM(question)) = ANY($1::text[]))',
+        [policyRules.map((rule) => rule.question.trim().toLowerCase())],
+      );
+      removed = result.rowCount;
+    }
     await client.query('COMMIT');
-    return { seeded: true, count: rules.length };
+    return { added, updated, removed, total: policyRules.length };
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;

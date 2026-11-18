@@ -12,14 +12,32 @@ import {
   fmtNumber,
   formatDate,
   mapCase,
-  matchesFilter,
-  searchCases,
   searchStudents,
   statusLabel,
   studentProfilePath,
 } from '../components/cases/caseUi';
 import { useAuth } from '../context/AuthContext';
-import { getCases } from '../services/api';
+import { usePagedCases } from '../hooks/usePagedCases';
+import { getCasesSummary } from '../services/api';
+
+const OWN_CASES_QUERY = { role: 'my_created_only' };
+const ALL_CASES_QUERY = {};
+
+// How far back the "Recent Cases" table goes, per role. The count cards always cover all cases.
+// Admin: every past record. Warden: every case they registered. Chief Warden and DSW: last 10 days.
+const RECENT_DAYS = { chief_warden: 10, dsw: 10 };
+const TABLE_QUERIES = {
+  admin: ALL_CASES_QUERY,
+  warden: OWN_CASES_QUERY,
+  chief_warden: { days: RECENT_DAYS.chief_warden },
+  dsw: { days: RECENT_DAYS.dsw },
+};
+
+// 'YYYY-MM-DD' -> local-midnight Date (new Date('YYYY-MM-DD') would be UTC).
+function parseDay(day) {
+  const [y, m, d] = String(day).split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
 
 const SUBTITLES = {
   admin: "Here's the current status of disciplinary cases.",
@@ -45,51 +63,58 @@ export default function Dashboard() {
   const [search, setSearch] = useState(() => searchParams.get('q') || '');
   const [filter, setFilter] = useState('all');
   const [trendRange, setTrendRange] = useState('30d');
-  const [cases, setCases] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [summary, setSummary] = useState(null);
+  const [summaryLoading, setSummaryLoading] = useState(true);
+  const [summaryError, setSummaryError] = useState('');
 
   const isWarden = role === 'warden';
   const myStage = STAGE_FOR_ROLE[role];
+  const scopeQuery = isWarden ? OWN_CASES_QUERY : ALL_CASES_QUERY;
 
+  // Counts, trend and side panel are computed by the server; the table loads one page at a time.
   useEffect(() => {
     let mounted = true;
-    getCases(isWarden ? { role: 'my_created_only' } : {})
-      .then((rows) => mounted && setCases(rows.map(mapCase)))
-      .catch((loadError) => mounted && setError(loadError?.message || 'Failed to load cases.'))
-      .finally(() => mounted && setLoading(false));
+    getCasesSummary(scopeQuery)
+      .then((data) => mounted && setSummary(data))
+      .catch((loadError) => mounted && setSummaryError(loadError?.message || 'Failed to load cases.'))
+      .finally(() => mounted && setSummaryLoading(false));
     return () => {
       mounted = false;
     };
-  }, [isWarden]);
+  }, [scopeQuery]);
+
+  const tableQuery = TABLE_QUERIES[role] || scopeQuery;
+  const tableDays = RECENT_DAYS[role];
+  const tableTitle = tableDays
+    ? `Cases from the Last ${tableDays} Days`
+    : isWarden ? 'Cases You Registered' : 'All Cases';
+  const table = usePagedCases({ query: tableQuery, filter, pageSize: 5 });
+  const searchHits = usePagedCases({ query: scopeQuery, search, pageSize: 20, enabled: Boolean(search.trim()) });
+
+  const loading = summaryLoading;
+  const error = summaryError || table.error;
 
   const stats = useMemo(() => {
-    const byStatus = Object.fromEntries([...ACTIVE_STATUSES, 'resolved'].map((s) => [s, 0]));
-    let severe = 0;
-    for (const c of cases) {
-      if (c.status in byStatus) byStatus[c.status] += 1;
-      if (c.severity === 'high' || c.severity === 'critical') severe += 1;
-    }
+    const byStatus = { pending_chief: 0, pending_dsw: 0, pending_admin: 0, resolved: 0, ...(summary?.byStatus || {}) };
     const active = ACTIVE_STATUSES.reduce((sum, s) => sum + byStatus[s], 0);
-    return { total: cases.length, active, resolved: byStatus.resolved, severe, byStatus };
-  }, [cases]);
-
-  const filtered = useMemo(() => cases.filter((c) => matchesFilter(c, filter, myStage)), [cases, filter, myStage]);
+    return { total: summary?.total || 0, active, resolved: byStatus.resolved, severe: summary?.severe || 0, byStatus };
+  }, [summary]);
 
   // Reviewers: oldest cases waiting on them. Wardens: their latest registrations.
-  const sideList = useMemo(() => {
-    if (isWarden) return [...cases].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 4);
-    return cases
-      .filter((c) => c.status === myStage)
-      .sort((a, b) => new Date(a.date) - new Date(b.date))
-      .slice(0, 4);
-  }, [cases, isWarden, myStage]);
+  const sideList = useMemo(() => (summary?.queue || []).map(mapCase), [summary]);
 
-  const trend = useMemo(() => buildTrend(cases, TREND_RANGES.find((r) => r.key === trendRange)), [cases, trendRange]);
+  const trend = useMemo(
+    () => buildTrend(
+      (summary?.trend || []).map((d) => ({ date: parseDay(d.day), count: d.count })),
+      TREND_RANGES.find((r) => r.key === trendRange)
+    ),
+    [summary, trendRange]
+  );
   const trendTotal = trend.reduce((sum, p) => sum + p.value, 0);
 
   const searchResults = useMemo(() => {
     if (!search.trim()) return [];
+    const cases = searchHits.rows;
     const studentResults = searchStudents(cases, search).map((c) => ({
       key: `student-${c.enrollment}`,
       title: c.student,
@@ -99,7 +124,8 @@ export default function Dashboard() {
       leading: <Avatar name={c.student} seed={Number(c.enrollment) || 0} size="h-8 w-8" />,
       to: studentProfilePath(c.enrollment),
     }));
-    const caseResults = searchCases(cases, search)
+    // The server already matched the search text; show the first 8 cases.
+    const caseResults = cases
       .slice(0, 8)
       .map((c) => ({
         key: c.id,
@@ -109,7 +135,7 @@ export default function Dashboard() {
         to: caseLink(role, c.id),
       }));
     return [...studentResults, ...caseResults];
-  }, [cases, search, role]);
+  }, [searchHits.rows, search, role]);
 
   const statCards = [
     {
@@ -199,15 +225,17 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
           <div className="xl:col-span-8 space-y-6">
             <CasesTable
-              key={filter}
-              cases={filtered}
-              loading={loading}
+              cases={table.rows}
+              loading={table.loading}
               role={role}
-              title="Recent Cases"
+              title={tableTitle}
               tabs={tabs}
               activeTab={filter}
               onTabChange={setFilter}
               pageSize={5}
+              total={table.total}
+              page={table.page}
+              onPageChange={table.setPage}
             />
 
             <Card

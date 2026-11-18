@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { createRule, deleteRule, getRules, updateRule } from '../../services/api';
+import { createRule, deleteRule, getRules, loadDacPolicyRules, updateRule } from '../../services/api';
 
 const severityColors = {
   Critical: 'bg-red-100 text-red-700',
@@ -15,12 +15,26 @@ const emptyRuleForm = {
   weight: '',
 };
 
+// DAC Policy v2 (BMU/RO/2025/0051): penalty points and fine per offence level.
+const DAC_LEVELS = {
+  'Level 1': { points: 10, fine: 1000 },
+  'Level 2': { points: 25, fine: 2500 },
+  'Level 3': { points: 50, fine: 5000 },
+  'Level 4': { points: 100, fine: 10000 },
+};
+
+// Weight = penalty points: 100 Level 4, 50 Level 3, 25 Level 2, 10 Level 1.
 function toSeverity(weight) {
   const value = Number(weight || 0);
-  if (value >= 80) return 'Critical';
-  if (value >= 60) return 'High';
-  if (value >= 40) return 'Medium';
+  if (value >= 100) return 'Critical';
+  if (value >= 50) return 'High';
+  if (value >= 25) return 'Medium';
   return 'Low';
+}
+
+function formatFine(category) {
+  const fine = DAC_LEVELS[category]?.fine;
+  return fine ? `₹${fine.toLocaleString('en-IN')}` : '—';
 }
 
 function formatRuleId(id) {
@@ -36,6 +50,7 @@ export default function RulesWeights() {
   const [form, setForm] = useState(emptyRuleForm);
   const [submitting, setSubmitting] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [loadPolicyOpen, setLoadPolicyOpen] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -97,12 +112,37 @@ export default function RulesWeights() {
   };
 
   const handleFormChange = (field) => (event) => {
-    setForm((prev) => ({ ...prev, [field]: event.target.value }));
+    const value = event.target.value;
+    setForm((prev) => {
+      const next = { ...prev, [field]: value };
+      // Choosing a DAC level fills in that level's penalty points.
+      if (field === 'category' && DAC_LEVELS[value]) next.weight = String(DAC_LEVELS[value].points);
+      return next;
+    });
+  };
+
+  const handleLoadPolicy = async (replace) => {
+    try {
+      setSubmitting(true);
+      setError('');
+      setSuccess('');
+      const result = await loadDacPolicyRules(replace);
+      setRules((await getRules()) || []);
+      setSuccess(
+        `DAC Policy v2 loaded: ${result.added} added, ${result.updated} updated`
+        + `${replace ? `, ${result.removed} other rules removed` : ''}.`,
+      );
+    } catch (loadError) {
+      setError(loadError?.message || 'Failed to load the DAC policy rules.');
+    } finally {
+      setSubmitting(false);
+      setLoadPolicyOpen(false);
+    }
   };
 
   const handleSubmit = async () => {
     if (!form.name.trim() || form.weight === '') {
-      setError('Rule name and weight are required.');
+      setError('Offence and penalty points are required.');
       return;
     }
 
@@ -160,9 +200,18 @@ export default function RulesWeights() {
         <div>
           <h3 className="text-lg font-bold text-[#0f172a]">Rules &amp; Weight Management</h3>
           <p className="text-sm text-[#64748b] mt-0.5">
-            Configure the scoring rules and their severity weights used during case evaluation.
+            Offences and their penalty points, as per the Disciplinary Action Policy (Version 02) and the Unfair Means Policy.
           </p>
         </div>
+        <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setLoadPolicyOpen(true)}
+          className="flex items-center gap-2 border border-[#3d3793] text-[#3d3793] hover:bg-[#eef2fb] text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+        >
+          <span className="material-symbols-outlined text-[18px]">policy</span>
+          Load DAC Policy
+        </button>
         <button
           type="button"
           onClick={openCreate}
@@ -171,6 +220,7 @@ export default function RulesWeights() {
           <span className="material-symbols-outlined text-[18px]">add</span>
           Add Rule
         </button>
+        </div>
       </div>
 
       {success && (
@@ -189,9 +239,9 @@ export default function RulesWeights() {
       <div className="grid grid-cols-4 gap-4">
           {[
             { label: 'Total Rules', value: stats.total, icon: 'rule', color: 'text-[#3d3793]', bg: 'bg-[#eef2fb]' },
-            { label: 'Critical', value: stats.critical, icon: 'crisis_alert', color: 'text-red-600', bg: 'bg-red-50' },
-            { label: 'High', value: stats.high, icon: 'warning', color: 'text-orange-600', bg: 'bg-orange-50' },
-            { label: 'Avg Weight', value: stats.avgWeight, icon: 'scale', color: 'text-emerald-600', bg: 'bg-emerald-50' },
+            { label: 'Level 4 (Critical)', value: stats.critical, icon: 'crisis_alert', color: 'text-red-600', bg: 'bg-red-50' },
+            { label: 'Level 3 (High)', value: stats.high, icon: 'warning', color: 'text-orange-600', bg: 'bg-orange-50' },
+            { label: 'Avg Points', value: stats.avgWeight, icon: 'scale', color: 'text-emerald-600', bg: 'bg-emerald-50' },
           ].map(({ label, value, icon, color, bg }) => (
           <div key={label} className="bg-white rounded-xl border border-[#e2e8f0] p-4 flex items-center gap-4">
             <div className={`w-10 h-10 rounded-lg ${bg} flex items-center justify-center shrink-0`}>
@@ -211,7 +261,7 @@ export default function RulesWeights() {
           <table className="w-full text-left">
             <thead>
               <tr className="bg-slate-50/50 border-b border-[#e2e8f0]">
-                {['Rule ID', 'Rule Name', 'Category', 'Weight', 'Severity', 'Actions'].map((h) => (
+                {['Rule ID', 'Offence', 'Level', 'Penalty Points', 'Fine', 'Severity', 'Actions'].map((h) => (
                   <th key={h} className="px-5 py-3.5 text-xs font-semibold text-[#64748b] uppercase tracking-wider">
                     {h}
                   </th>
@@ -221,13 +271,13 @@ export default function RulesWeights() {
             <tbody className="divide-y divide-[#f1f5f9]">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="px-5 py-8 text-center text-sm text-[#64748b]">
+                  <td colSpan={7} className="px-5 py-8 text-center text-sm text-[#64748b]">
                     Loading rules...
                   </td>
                 </tr>
               ) : rules.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-5 py-8 text-center text-sm text-[#64748b]">
+                  <td colSpan={7} className="px-5 py-8 text-center text-sm text-[#64748b]">
                     No rules found.
                   </td>
                 </tr>
@@ -255,6 +305,9 @@ export default function RulesWeights() {
                           </div>
                           <span className="text-sm font-semibold text-[#0f172a] w-8">{rule.weight}</span>
                         </div>
+                      </td>
+                      <td className="px-5 py-4">
+                        <span className="text-sm text-[#64748b] whitespace-nowrap">{formatFine(rule.category)}</span>
                       </td>
                       <td className="px-5 py-4">
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${severityColors[severity]}`}>
@@ -297,12 +350,12 @@ export default function RulesWeights() {
               <h4 className="text-[#0f172a] text-lg font-bold">
                 {modal.mode === 'create' ? 'Add Rule' : 'Edit Rule'}
               </h4>
-              <p className="text-sm text-[#64748b] mt-1">Provide rule details for scoring.</p>
+              <p className="text-sm text-[#64748b] mt-1">Pick a DAC level to fill in its penalty points.</p>
             </div>
 
             <div className="grid grid-cols-1 gap-4">
               <div>
-                <label className="text-sm font-medium text-[#334155]">Rule Name *</label>
+                <label className="text-sm font-medium text-[#334155]">Offence *</label>
                 <input
                   type="text"
                   value={form.name}
@@ -311,16 +364,23 @@ export default function RulesWeights() {
                 />
               </div>
               <div>
-                <label className="text-sm font-medium text-[#334155]">Category</label>
-                <input
-                  type="text"
+                <label className="text-sm font-medium text-[#334155]">Level</label>
+                <select
                   value={form.category}
                   onChange={handleFormChange('category')}
                   className="w-full bg-[#f8fafc] border border-[#e2e8f0] rounded-lg px-3 py-2 text-sm text-[#0f172a] focus:outline-none focus:border-[#3d3793] focus:ring-1 focus:ring-[#3d3793]"
-                />
+                >
+                  <option value="">No level</option>
+                  {Object.entries(DAC_LEVELS).map(([level, info]) => (
+                    <option key={level} value={level}>{level} ({info.points} pts, ₹{info.fine.toLocaleString('en-IN')})</option>
+                  ))}
+                  {form.category && !DAC_LEVELS[form.category] ? (
+                    <option value={form.category}>{form.category}</option>
+                  ) : null}
+                </select>
               </div>
               <div>
-                <label className="text-sm font-medium text-[#334155]">Weight *</label>
+                <label className="text-sm font-medium text-[#334155]">Penalty Points *</label>
                 <input
                   type="number"
                   min="0"
@@ -347,6 +407,49 @@ export default function RulesWeights() {
                 className="px-4 py-2 text-sm font-semibold bg-[#3d3793] text-white rounded-lg hover:bg-[#4338ca] disabled:opacity-60"
               >
                 {submitting ? 'Saving...' : 'Save Rule'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {loadPolicyOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-md rounded-2xl bg-white border border-[#e2e8f0] p-6 space-y-4">
+            <div>
+              <h4 className="text-[#0f172a] text-lg font-bold">Load DAC &amp; Unfair Means Policy</h4>
+              <p className="text-sm text-[#64748b] mt-1">
+                Adds every offence from the DAC Policy (Level 1 = 10, Level 2 = 25, Level 3 = 50, Level 4 = 100 points),
+                the exam offences from the Unfair Means Policy that map to a DAC level, and plagiarism.
+                Existing rules with the same name get corrected points and level.
+              </p>
+              <p className="text-sm text-[#64748b] mt-2">
+                <span className="font-medium text-[#0f172a]">Replace all</span> also deletes every rule that is not in the policy.
+              </p>
+            </div>
+            <div className="flex flex-wrap justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setLoadPolicyOpen(false)}
+                className="px-4 py-2 text-sm font-semibold text-[#475569] hover:text-[#0f172a]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={() => handleLoadPolicy(true)}
+                className="px-4 py-2 text-sm font-semibold border border-red-200 text-red-700 rounded-lg hover:bg-red-50 disabled:opacity-60"
+              >
+                Replace all
+              </button>
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={() => handleLoadPolicy(false)}
+                className="px-4 py-2 text-sm font-semibold bg-[#3d3793] text-white rounded-lg hover:bg-[#4338ca] disabled:opacity-60"
+              >
+                {submitting ? 'Loading...' : 'Add / update'}
               </button>
             </div>
           </div>

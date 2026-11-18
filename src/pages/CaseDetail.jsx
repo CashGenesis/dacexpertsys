@@ -3,9 +3,9 @@ import { Link, useLocation, useParams } from 'react-router-dom';
 import DACLayout from '../components/layout/DACLayout';
 import { Avatar, Button, Card, EmptyState, Icon, SeverityPill, StatusText } from '../components/cases/parts';
 import StudentProfileLink from '../components/cases/StudentProfileLink';
-import { formatDate, formatDateTime, fmtNumber, safeReturnPath, toTitleCase } from '../components/cases/caseUi';
+import { caseLink, formatDate, formatDateTime, fmtNumber, safeReturnPath, statusLabel, toTitleCase } from '../components/cases/caseUi';
 import { useAuth } from '../context/AuthContext';
-import { approveCase, getCaseById, getCaseTimeline, updateCase } from '../services/api';
+import { approveCase, getCaseById, getCaseEvidence, getCaseMeetings, getCaseTimeline, getGroupCases, scheduleCaseMeeting, updateCase, warnCase } from '../services/api';
 
 const STEPS = [
   { key: 'registered', label: 'Registered', role: 'Warden' },
@@ -111,6 +111,144 @@ function AdminDecision({ caseItem, busy, onSubmit }) {
   );
 }
 
+const MEETING_ROLES = ['admin', 'dsw', 'chief_warden', 'student'];
+const DEFAULT_MEETING_LOCATION = 'Office of the Dean, Student Welfare';
+
+function formatMeetingTime(value) {
+  return new Date(value).toLocaleString('en-IN', {
+    weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true,
+  });
+}
+
+// Value for <input type="datetime-local"> in the browser's local time.
+function toLocalInputValue(date) {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+/**
+ * In-person DAC meetings. The Admin schedules one while the case waits for the final decision;
+ * the student is notified in the app and by email. Everyone else sees the list.
+ */
+function MeetingsCard({ meetings, canSchedule, isStudent, busy, onSchedule }) {
+  const [open, setOpen] = useState(false);
+  const [when, setWhen] = useState('');
+  const [place, setPlace] = useState(DEFAULT_MEETING_LOCATION);
+  const [notes, setNotes] = useState('');
+  const [formError, setFormError] = useState('');
+  const [minWhen, setMinWhen] = useState('');
+  // Captured once per load: decides which meetings are labelled upcoming vs past.
+  const [now] = useState(() => Date.now());
+
+  if (!canSchedule && meetings.length === 0) return null;
+
+  const openForm = () => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(11, 0, 0, 0);
+    setWhen(toLocalInputValue(tomorrow));
+    setMinWhen(toLocalInputValue(new Date()));
+    setPlace(DEFAULT_MEETING_LOCATION);
+    setNotes('');
+    setFormError('');
+    setOpen(true);
+  };
+
+  const submit = async (e) => {
+    e.preventDefault();
+    const date = new Date(when);
+    if (!when || Number.isNaN(date.getTime())) return setFormError('Pick a date and time.');
+    if (date.getTime() <= Date.now()) return setFormError('The meeting must be in the future.');
+    if (!place.trim()) return setFormError('Enter where the meeting is held.');
+    setFormError('');
+    const ok = await onSchedule({ scheduled_at: date.toISOString(), location: place.trim(), notes: notes.trim() });
+    if (ok) setOpen(false);
+  };
+
+  return (
+    <Card title="DAC Meeting" icon="event">
+      <div className="px-6 pb-6 space-y-4">
+        {meetings.length === 0 ? (
+          <p className="text-sm text-slate-600">No meeting scheduled yet. Call the student for an in-person meeting before deciding.</p>
+        ) : (
+          <ul className="space-y-3">
+            {meetings.map((m) => {
+              const upcoming = new Date(m.scheduled_at).getTime() >= now;
+              return (
+                <li key={m.id} className={`rounded-lg border px-3 py-2.5 ${upcoming ? 'border-[#d9d6f3] bg-[#f6f5fd]' : 'border-slate-200 bg-slate-50'}`}>
+                  <p className="text-sm font-semibold text-slate-900">{formatMeetingTime(m.scheduled_at)}</p>
+                  <p className="text-sm text-slate-700">{m.location}</p>
+                  {m.notes && <p className="text-xs text-slate-600 mt-1">{m.notes}</p>}
+                  <p className="text-xs text-slate-500 mt-1">
+                    {upcoming ? 'Upcoming' : 'Past'}
+                    {!isStudent && (m.email_sent ? ' · Email sent' : ` · No email: ${m.email_status || 'not sent'}`)}
+                  </p>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+
+        {canSchedule && !open && (
+          <Button variant="outline" className="w-full" disabled={busy} onClick={openForm}>
+            <Icon name="event_available" className="text-[18px]" />
+            Send meeting reminder
+          </Button>
+        )}
+
+        {canSchedule && open && (
+          <form onSubmit={submit} className="space-y-3 rounded-lg border border-slate-200 p-3">
+            <label className="block">
+              <span className="text-xs text-slate-500">Date and time</span>
+              <input
+                type="datetime-local"
+                value={when}
+                min={minWhen}
+                onChange={(e) => setWhen(e.target.value)}
+                required
+                className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-[#3d3793] focus:ring-4 focus:ring-indigo-100"
+              />
+            </label>
+            <label className="block">
+              <span className="text-xs text-slate-500">Location</span>
+              <input
+                type="text"
+                value={place}
+                maxLength={200}
+                onChange={(e) => setPlace(e.target.value)}
+                required
+                className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-[#3d3793] focus:ring-4 focus:ring-indigo-100"
+              />
+            </label>
+            <label className="block">
+              <span className="text-xs text-slate-500">Note to the student (optional)</span>
+              <textarea
+                rows={2}
+                value={notes}
+                maxLength={1000}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="e.g. Bring a parent/guardian and any supporting documents."
+                className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-[#3d3793] focus:ring-4 focus:ring-indigo-100"
+              />
+            </label>
+            {formError && <p className="text-xs text-rose-700">{formError}</p>}
+            <p className="text-xs text-slate-500">The student is notified on their dashboard and by email.</p>
+            <div className="flex gap-2">
+              <Button type="button" variant="outline" className="flex-1" disabled={busy} onClick={() => setOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" className="flex-1" disabled={busy}>
+                <Icon name="send" className="text-[18px]" />
+                Send
+              </Button>
+            </div>
+          </form>
+        )}
+      </div>
+    </Card>
+  );
+}
+
 /**
  * One case page for every role. The workflow action is shown only to the role
  * the case is currently assigned to (Chief Warden -> DSW -> Admin).
@@ -124,6 +262,10 @@ export default function CaseDetail() {
   const { role } = useAuth();
   const [caseItem, setCaseItem] = useState(null);
   const [timeline, setTimeline] = useState([]);
+  const [evidence, setEvidence] = useState([]);
+  const [groupCases, setGroupCases] = useState([]);
+  const [meetings, setMeetings] = useState([]);
+  const [evidenceError, setEvidenceError] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -131,16 +273,28 @@ export default function CaseDetail() {
 
   const load = useCallback(async () => {
     try {
-      const [item, events] = await Promise.all([getCaseById(caseId), getCaseTimeline(caseId).catch(() => [])]);
+      const [item, events, files] = await Promise.all([
+        getCaseById(caseId),
+        getCaseTimeline(caseId).catch(() => []),
+        getCaseEvidence(caseId).catch(() => []),
+      ]);
       setCaseItem(item);
       setTimeline(events);
+      setEvidence(Array.isArray(files) ? files : []);
+      // Other students' cases from the same group incident: staff only.
+      const linked = item?.incident_group_id && role !== 'student'
+        ? await getGroupCases(item.id).catch(() => [])
+        : [];
+      setGroupCases(Array.isArray(linked) ? linked : []);
+      const caseMeetings = MEETING_ROLES.includes(role) ? await getCaseMeetings(item.id).catch(() => []) : [];
+      setMeetings(Array.isArray(caseMeetings) ? caseMeetings : []);
       setError('');
     } catch (loadError) {
       setError(loadError?.message || 'Case not found.');
     } finally {
       setLoading(false);
     }
-  }, [caseId]);
+  }, [caseId, role]);
 
   useEffect(() => {
     load();
@@ -150,9 +304,9 @@ export default function CaseDetail() {
     setBusy(true);
     setNotice(null);
     try {
-      await action();
+      const result = await action();
       await load();
-      setNotice({ type: 'success', text: successMessage });
+      setNotice({ type: 'success', text: typeof successMessage === 'function' ? successMessage(result) : successMessage });
     } catch (actionError) {
       setNotice({ type: 'error', text: actionError?.message || 'Action failed.' });
     } finally {
@@ -166,6 +320,61 @@ export default function CaseDetail() {
   const status = String(caseItem?.status || '').toLowerCase();
   const assigned = String(caseItem?.assigned_to_role || '').toLowerCase();
   const canAct = Boolean(caseItem) && status !== 'resolved' && assigned === role;
+
+  // Storage links expire after 10 minutes, so fetch a fresh one on every click. The tab is
+  // opened synchronously first; opening it after the await would be blocked as a popup.
+  const openEvidence = async (index) => {
+    setEvidenceError('');
+    const tab = window.open('', '_blank');
+    try {
+      const fresh = await getCaseEvidence(caseItem.id);
+      setEvidence(fresh);
+      const url = fresh[index]?.url;
+      if (!url) throw new Error('This evidence file is not available.');
+      if (tab) {
+        tab.opener = null;
+        tab.location.href = url;
+      } else {
+        window.location.href = url;
+      }
+    } catch (openError) {
+      tab?.close();
+      setEvidenceError(openError?.message || 'Could not open the evidence file.');
+    }
+  };
+  const scheduleMeeting = async (payload) => {
+    let ok = false;
+    await runAction(async () => {
+      const meeting = await scheduleCaseMeeting(caseItem.id, payload);
+      ok = true;
+      return meeting;
+    }, (meeting) => (meeting?.email_sent
+      ? 'Meeting scheduled. The student was notified on their dashboard and by email.'
+      : `Meeting scheduled and shown on the student's dashboard. No email sent: ${meeting?.email_status || 'unknown reason'}.`));
+    return ok;
+  };
+
+  const resolvedWithWarning = status === 'resolved' && caseItem?.resolution_type === 'warning';
+
+  const resolveWithWarning = () => {
+    const confirmed = window.confirm(
+      'Resolve this case by giving the student a warning? The case will be closed and all members will be notified.'
+    );
+    if (!confirmed) return;
+    runAction(() => warnCase(caseItem.id), 'Case resolved with a warning to the student.');
+  };
+
+  const warningButton = (
+    <Button
+      variant="outline"
+      className="w-full border-amber-300 text-amber-800 hover:bg-amber-50"
+      disabled={busy}
+      onClick={resolveWithWarning}
+    >
+      <Icon name="warning" className="text-[18px]" />
+      Resolve with warning
+    </Button>
+  );
 
   return (
     <DACLayout>
@@ -240,22 +449,40 @@ export default function CaseDetail() {
                       <p className="text-xs text-slate-500">Description</p>
                       <p className="mt-1 text-sm text-slate-800 leading-relaxed">{caseItem.description || '—'}</p>
                     </div>
+                    {caseItem.notes && (
+                      <div>
+                        <p className="text-xs text-slate-500">Additional details</p>
+                        <p className="mt-1 text-sm text-slate-800 leading-relaxed whitespace-pre-line">{caseItem.notes}</p>
+                      </div>
+                    )}
                     {caseItem.decision && (
                       <div>
                         <p className="text-xs text-slate-500">Decision</p>
                         <p className="mt-1 text-sm text-slate-800 leading-relaxed">{caseItem.decision}</p>
                       </div>
                     )}
-                    {caseItem.evidence_url && (
-                      <a
-                        href={caseItem.evidence_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-2 text-sm font-medium text-[#3d3793] hover:underline"
-                      >
-                        <Icon name="attach_file" className="text-[18px]" />
-                        View evidence
-                      </a>
+                    {evidence.length > 0 && (
+                      <div>
+                        <p className="text-xs text-slate-500">Evidence</p>
+                        <ul className="mt-1 space-y-1">
+                          {evidence.map((file, index) => (
+                            <li key={file.id ?? `legacy-${index}`}>
+                              <button
+                                type="button"
+                                onClick={() => openEvidence(index)}
+                                disabled={!file.url}
+                                title={file.url ? file.name : 'File not available'}
+                                className="inline-flex items-center gap-2 text-sm font-medium text-[#3d3793] hover:underline disabled:text-slate-400 disabled:no-underline disabled:cursor-not-allowed"
+                              >
+                                <Icon name="attach_file" className="text-[18px]" />
+                                View evidence{evidence.length > 1 ? ` ${index + 1}` : ''}
+                                {!file.url && <span className="text-xs font-normal">(not available)</span>}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                        {evidenceError && <p className="mt-1 text-xs text-rose-700">{evidenceError}</p>}
+                      </div>
                     )}
                   </div>
                 </Card>
@@ -287,6 +514,33 @@ export default function CaseDetail() {
               </div>
 
               <div className="xl:col-span-4 space-y-6">
+                {caseItem.incident_group_id && (
+                  <Card title="Group Incident" icon="groups">
+                    <div className="px-6 pb-6 space-y-3">
+                      <p className="text-sm text-slate-600">
+                        {role === 'student'
+                          ? 'This case was registered as part of a group incident. Each student involved has a separate case.'
+                          : `Registered together with ${groupCases.length} other student${groupCases.length === 1 ? '' : 's'}. Each student has a separate case.`}
+                      </p>
+                      {role !== 'student' && groupCases.length > 0 && (
+                        <ul className="divide-y divide-slate-100 rounded-lg border border-slate-100">
+                          {groupCases.map((g) => (
+                            <li key={g.id}>
+                              <Link to={caseLink(role, g.id)} className="flex items-center justify-between gap-3 px-3 py-2.5 hover:bg-slate-50">
+                                <span className="min-w-0">
+                                  <span className="block text-sm font-medium text-slate-900 truncate">{g.student_name}</span>
+                                  <span className="block text-xs text-slate-500">{g.external_case_id || `#${g.id}`} · {g.enrollment_no}</span>
+                                </span>
+                                <span className="shrink-0 text-xs text-slate-500">{statusLabel(g.status)}</span>
+                              </Link>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  </Card>
+                )}
+
                 <Card title="Student" icon="person">
                   <div className="px-6 pb-6">
                     <div className="flex items-center gap-3">
@@ -306,9 +560,27 @@ export default function CaseDetail() {
                   </div>
                 </Card>
 
+                <MeetingsCard
+                  meetings={meetings}
+                  canSchedule={canAct && role === 'admin'}
+                  isStudent={role === 'student'}
+                  busy={busy}
+                  onSchedule={scheduleMeeting}
+                />
+
                 <Card title="Workflow" icon="account_tree">
                   <div className="px-6 pb-6 space-y-4">
-                    {status === 'resolved' && (
+                    {resolvedWithWarning && (
+                      <p className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-900">
+                        <Icon name="warning" className="text-[18px] mt-0.5" />
+                        <span>
+                          Resolved by <span className="font-medium">{ROLE_NAMES[caseItem.resolved_by_role] || 'a reviewer'}</span> with a
+                          warning to the student{caseItem.resolved_at ? ` on ${formatDate(caseItem.resolved_at)}` : ''}.
+                        </span>
+                      </p>
+                    )}
+
+                    {status === 'resolved' && !resolvedWithWarning && (
                       <p className="text-sm text-slate-600">
                         Resolved{caseItem.resolved_at ? ` on ${formatDate(caseItem.resolved_at)}` : ''}. No further action needed.
                       </p>
@@ -332,6 +604,7 @@ export default function CaseDetail() {
                           <Icon name="send" className="text-[18px]" />
                           {FORWARD_LABELS[role].button}
                         </Button>
+                        {warningButton}
                       </>
                     )}
 
@@ -344,10 +617,16 @@ export default function CaseDetail() {
                           onSubmit={(values) =>
                             runAction(async () => {
                               await updateCase(caseItem.id, values);
-                              await approveCase(caseItem.id);
-                            }, 'Case resolved and the decision recorded.')
+                              return approveCase(caseItem.id);
+                            }, (result) => {
+                              const email = result?.email;
+                              if (email?.sent) return `Case resolved and the decision recorded. Email sent to ${email.to}.`;
+                              if (email?.reason) return `Case resolved and the decision recorded. No email sent: ${email.reason}.`;
+                              return 'Case resolved and the decision recorded.';
+                            })
                           }
                         />
+                        {warningButton}
                       </>
                     )}
                   </div>

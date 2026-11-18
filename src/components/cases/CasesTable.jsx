@@ -5,8 +5,9 @@ import { Avatar, Card, EmptyState, Icon, SeverityPill, StatusText } from './part
 import StudentProfileLink from './StudentProfileLink';
 
 /**
- * Paginated case table with optional filter tabs. Remount it (change `key`)
- * when the list changes so it returns to page 1.
+ * Paginated case table with optional filter tabs.
+ * - Client mode (default): `cases` is the full list; remount (change `key`) to return to page 1.
+ * - Server mode: pass `onPageChange`, `page` and `total`; `cases` is the current page only.
  */
 export default function CasesTable({
   cases,
@@ -19,13 +20,24 @@ export default function CasesTable({
   onTabChange,
   pageSize = 10,
   showStudent = true,
+  total,
+  page: serverPage,
+  onPageChange,
 }) {
   const navigate = useNavigate();
-  const [page, setPage] = useState(0);
-  const totalPages = Math.max(1, Math.ceil(cases.length / pageSize));
-  const rows = cases.slice(page * pageSize, (page + 1) * pageSize);
-  const rangeStart = cases.length ? page * pageSize + 1 : 0;
-  const rangeEnd = Math.min((page + 1) * pageSize, cases.length);
+  const [localPage, setLocalPage] = useState(0);
+  const serverMode = typeof onPageChange === 'function';
+  const page = serverMode ? serverPage || 0 : localPage;
+  const count = serverMode ? total || 0 : cases.length;
+  const setPage = (next) => {
+    const value = typeof next === 'function' ? next(page) : next;
+    if (serverMode) onPageChange(value);
+    else setLocalPage(value);
+  };
+  const totalPages = Math.max(1, Math.ceil(count / pageSize));
+  const rows = serverMode ? cases : cases.slice(page * pageSize, (page + 1) * pageSize);
+  const rangeStart = count ? page * pageSize + 1 : 0;
+  const rangeEnd = Math.min((page + 1) * pageSize, count);
   const columns = showStudent ? 6 : 5;
 
   return (
@@ -115,7 +127,7 @@ export default function CasesTable({
 
       <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 text-sm text-slate-500">
         <span className="tabular-nums">
-          Showing {rangeStart}–{rangeEnd} of {fmtNumber(cases.length)} cases
+          Showing {rangeStart}–{rangeEnd} of {fmtNumber(count)} cases
         </span>
         {totalPages > 1 && (
           <nav className="flex items-center gap-1" aria-label="Pagination">

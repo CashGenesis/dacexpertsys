@@ -23,10 +23,14 @@ const RESILIENCE = {
 
 // DATABASE_URL (Supabase) takes precedence over the local PG_* settings.
 // Supabase signs its certificates with its own root CA, pinned here for verified TLS.
+// The Supabase session pooler allows only a few clients (pool_size, 15 by default) shared by
+// every app connected to the project, so this backend keeps its own pool small.
+// Extra queries wait in the local queue instead of being refused by Supabase.
 const pool = process.env.DATABASE_URL
   ? new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: { ca: fs.readFileSync(path.resolve(__dirname, 'supabase-ca.crt'), 'utf8') },
+    max: Number(process.env.PG_POOL_MAX) || 5,
     ...RESILIENCE,
   })
   : new Pool({
@@ -44,5 +48,34 @@ const pool = process.env.DATABASE_URL
 pool.on('error', (err) => {
   console.warn(`PostgreSQL idle client error (${err.code || 'unknown'}): ${err.message}. The connection will be re-established on the next query.`);
 });
+
+// When the Supabase pooler is full (other apps hold its slots) a new connection is refused
+// with EMAXCONNSESSION. Slots free up within moments, so retry a few times with backoff
+// before failing the request.
+const POOLER_FULL_RETRIES = 4;
+const isPoolerFull = (err) => /EMAXCONNSESSION|max clients reached/i.test(String(err?.message || ''));
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function withPoolerRetry(action) {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await action();
+    } catch (err) {
+      if (!isPoolerFull(err) || attempt >= POOLER_FULL_RETRIES) throw err;
+      await wait(300 * 2 ** attempt);
+    }
+  }
+}
+
+// pool.query(text, values) and the promise form of pool.connect() are what the app uses.
+// Callback forms (used internally by pg) pass through unchanged.
+const rawQuery = pool.query.bind(pool);
+const rawConnect = pool.connect.bind(pool);
+pool.query = (...args) => (typeof args[args.length - 1] === 'function'
+  ? rawQuery(...args)
+  : withPoolerRetry(() => rawQuery(...args)));
+pool.connect = (...args) => (args.length
+  ? rawConnect(...args)
+  : withPoolerRetry(() => rawConnect()));
 
 export default pool;
