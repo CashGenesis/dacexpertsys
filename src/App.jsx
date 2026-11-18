@@ -6,6 +6,8 @@ import { useAuth } from './context/AuthContext';
 import { useLenis } from './hooks/useLenis';
 import Login from './Login.jsx';
 import DacChatbot from './components/DacChatbot.jsx';
+import PageLoader from './components/PageLoader.jsx';
+import DACLayout from './components/layout/DACLayout.jsx';
 
 // Pages load on first visit, so the login screen does not wait for every page's code.
 const Dashboard = lazy(() => import('./pages/Dashboard.jsx'));
@@ -25,9 +27,24 @@ const StudentPolicy = lazy(() => import('./pages/student/StudentPolicy.jsx'));
 const StudentProfile = lazy(() => import('./pages/StudentProfile.jsx'));
 const Settings = lazy(() => import('./pages/Settings.jsx'));
 
+/**
+ * The single route-level loader (Suspense fallback + auth check). Signed-in
+ * users keep the sidebar and top bar while the next page's code loads; it
+ * renders only while React is actually waiting, with no added delay.
+ */
+function RouteLoader() {
+  const { isAuthenticated } = useAuth();
+  if (!isAuthenticated) return <PageLoader fullScreen />;
+  return (
+    <DACLayout>
+      <PageLoader />
+    </DACLayout>
+  );
+}
+
 function ProtectedRoute({ children, roles }) {
   const { currentUser, loading, isAuthenticated, role } = useAuth();
-  if (loading) return null;
+  if (loading) return <RouteLoader />;
   if (!isAuthenticated || !currentUser) {
     return <Navigate to="/" replace />;
   }
@@ -45,7 +62,8 @@ function AnimatedRoutes() {
 
   return (
     <AnimatePresence mode="wait">
-      <Suspense fallback={null} key={location.pathname}>
+      {/* The single page-transition loader: shown while a page's code chunk loads. */}
+      <Suspense fallback={<RouteLoader />} key={location.pathname}>
       <Routes location={location}>
         {/* Public */}
         <Route path="/" element={<Login />} />

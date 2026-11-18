@@ -10,9 +10,12 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    <!-- Page loader styles: loaded before the bundle so the initial loader is styled too. -->
+    <link rel="stylesheet" href="/page-loader.css" />
   </head>
-  <body>
-    <div id="root"></div>
+  <body style="background-color: #f6f6fa">
+    <!-- Initial-load loader (same markup as PageLoader fullScreen); React replaces it on first render. -->
+    <div id="root"><div class="page-loader page-loader--screen" role="status" aria-live="polite"><div class="page-loader__mark"><span class="page-loader__ring" aria-hidden="true"></span><img class="page-loader__tree" src="/loader-tree.png" alt="" width="263" height="276" /></div><p class="page-loader__label">Loading</p></div></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

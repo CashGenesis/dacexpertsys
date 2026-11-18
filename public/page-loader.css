@@ -1,0 +1,77 @@
+/*
+ * Page loader styles (src/components/PageLoader.jsx), linked from index.html.
+ * Served from public/ so the same loader is styled while the JS bundle itself
+ * downloads. The tree (loader-tree.png) stays still; one gradient ring rotates.
+ */
+.page-loader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  background: transparent;
+}
+.page-loader--screen { min-height: 100vh; min-height: 100dvh; }
+/* Fills DACLayout's main area: viewport minus the top bar (+1px border) and main padding, without overflowing. */
+.page-loader--content { min-height: calc(100vh - 6.5rem); min-height: calc(100dvh - 6.5rem); }
+@media (min-width: 640px) {
+  .page-loader--content { min-height: calc(100vh - 9rem); min-height: calc(100dvh - 9rem); }
+}
+.page-loader__mark {
+  position: relative;
+  width: 136px;
+  height: 136px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.page-loader__tree { position: relative; width: 92px; height: auto; }
+/* One ring: the tree's palette swept around the circle (conic gradient),
+   cut to a thin band by a radial mask. The tail fades in from transparent
+   and a gap follows the rounded head. Only `transform` animates. */
+.page-loader__ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(
+    rgba(100, 190, 225, 0) 0deg,
+    #64bee1 70deg,
+    #2ba694 110deg,
+    #7ac197 150deg,
+    #eeb451 195deg,
+    #e59137 240deg,
+    #e47444 285deg,
+    #7d82ac 330deg,
+    transparent 330deg
+  );
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3.5px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3.5px));
+  animation: page-loader-spin 1.1s linear infinite;
+  will-change: transform;
+}
+/* Rounded head of the same ring, at the end of the gradient (330deg). */
+.page-loader__ring::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  margin-left: -2px;
+  border-radius: 50%;
+  background: #7d82ac;
+  transform-origin: 2px 68px;
+  transform: rotate(330deg);
+}
+.page-loader__label {
+  margin: 0;
+  font-family: 'Google Sans', system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #64748b;
+}
+@keyframes page-loader-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .page-loader__ring { animation: none; }
+}
