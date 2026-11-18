@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import DACLayout from '../components/layout/DACLayout';
-import { Avatar, Card, Icon, PageHeader } from '../components/cases/parts';
-import { fmtNumber, toTitleCase } from '../components/cases/caseUi';
+import { Icon, PageHeader } from '../components/cases/parts';
+import { toTitleCase } from '../components/cases/caseUi';
 import { useAuth } from '../context/AuthContext';
 import { getMe } from '../services/api';
 
@@ -14,19 +14,14 @@ const ROLE_NAMES = {
   admin: 'Administrator',
 };
 
-function Row({ icon, label, value }) {
-  return (
-    <div className="flex items-center gap-4 px-6 py-4">
-      <span className="h-9 w-9 shrink-0 rounded-lg bg-slate-100 text-slate-500 flex items-center justify-center">
-        <Icon name={icon} className="text-[18px]" />
-      </span>
-      <div className="min-w-0">
-        <p className="text-xs text-slate-500">{label}</p>
-        <p className="text-sm text-slate-900 truncate">{value || '—'}</p>
-      </div>
-    </div>
-  );
-}
+// Icon shown in the role tag under the name.
+const ROLE_ICONS = {
+  student: 'school',
+  warden: 'badge',
+  chief_warden: 'shield_person',
+  dsw: 'account_balance',
+  admin: 'admin_panel_settings',
+};
 
 // Opens Gmail's compose window addressed to the DAC office (nothing is sent automatically).
 const DAC_CONTACT_URL = 'https://mail.google.com/mail/?view=cm&fs=1&to=dac%40bmu.edu.in';
@@ -70,19 +65,36 @@ function InfoRow({ icon, label, value }) {
   );
 }
 
-/** A student's own profile: identity header, details, account security and DAC contact. */
-function StudentProfileView({ user, error }) {
+/**
+ * The signed-in user's own profile: identity header, role-specific details,
+ * account security and DAC contact. Shows only the fields the role has.
+ */
+function ProfileView({ user, role, error }) {
+  const isStudent = role === 'student';
+  const roleName = ROLE_NAMES[role] || toTitleCase(role);
   const program = user?.program ? String(user.program).toUpperCase() : null;
-  const details = [
-    { icon: 'mail', label: 'Email', value: user?.email },
-    { icon: 'calendar_month', label: 'Year of study', value: user?.year ? `Year ${user.year}` : null },
-    { icon: 'apartment', label: 'Hostel & room', value: [user?.hostel, user?.room].filter(Boolean).join(' · ') },
-    { icon: 'family_restroom', label: 'Parent email', value: user?.parent_email },
-  ];
-  const identity = [
-    { icon: 'tag', label: 'Enrollment Number', value: user?.enrollment_no },
-    { icon: 'school', label: 'Program', value: program },
-  ];
+
+  // Shown beside the name in the header (students only; staff have no equivalents).
+  const identity = isStudent
+    ? [
+        { icon: 'tag', label: 'Enrollment Number', value: user?.enrollment_no },
+        { icon: 'school', label: 'Program', value: program },
+      ]
+    : [];
+
+  const detailsTitle = isStudent ? 'Personal & Academic Information' : 'Account Information';
+  const details = isStudent
+    ? [
+        { icon: 'mail', label: 'Email', value: user?.email },
+        { icon: 'calendar_month', label: 'Year of study', value: user?.year ? `Year ${user.year}` : null },
+        { icon: 'apartment', label: 'Hostel & room', value: [user?.hostel, user?.room].filter(Boolean).join(' · ') },
+        { icon: 'family_restroom', label: 'Parent email', value: user?.parent_email },
+      ]
+    : [
+        { icon: 'badge', label: 'Role', value: roleName },
+        { icon: 'mail', label: 'Email', value: user?.email },
+        ...(user?.hostel ? [{ icon: 'apartment', label: 'Hostel', value: user.hostel }] : []),
+      ];
 
   return (
     <DACLayout>
@@ -115,30 +127,34 @@ function StudentProfileView({ user, error }) {
               <div className="min-w-0">
                 <p className="text-xl sm:text-2xl font-semibold text-slate-900 [overflow-wrap:anywhere]">{user?.name || '—'}</p>
                 <span className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-[#efedfb] text-[#3d3793] px-3 py-1 text-xs font-semibold">
-                  <Icon name="school" className="text-[16px]" />
-                  Student
+                  <Icon name={ROLE_ICONS[role] || 'person'} className="text-[16px]" />
+                  {roleName}
                 </span>
               </div>
             </div>
 
-            <div className="hidden md:block w-px self-stretch bg-slate-200" aria-hidden="true" />
+            {identity.length > 0 && (
+              <>
+                <div className="hidden md:block w-px self-stretch bg-slate-200" aria-hidden="true" />
 
-            <dl className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-4 md:flex md:gap-10 border-t border-slate-100 pt-5 md:border-0 md:pt-0">
-              {identity.map((item) => (
-                <div key={item.label} className="flex items-center gap-3 min-w-0">
-                  <IconTile name={item.icon} />
-                  <div className="min-w-0">
-                    <dt className="text-xs text-slate-500">{item.label}</dt>
-                    <dd className="text-base font-semibold text-slate-900 tabular-nums [overflow-wrap:anywhere]">{item.value || '—'}</dd>
-                  </div>
-                </div>
-              ))}
-            </dl>
+                <dl className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-4 md:flex md:gap-10 border-t border-slate-100 pt-5 md:border-0 md:pt-0">
+                  {identity.map((item) => (
+                    <div key={item.label} className="flex items-center gap-3 min-w-0">
+                      <IconTile name={item.icon} />
+                      <div className="min-w-0">
+                        <dt className="text-xs text-slate-500">{item.label}</dt>
+                        <dd className="text-base font-semibold text-slate-900 tabular-nums [overflow-wrap:anywhere]">{item.value || '—'}</dd>
+                      </div>
+                    </div>
+                  ))}
+                </dl>
+              </>
+            )}
           </div>
         </section>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6 items-start">
-          <SectionCard title="Personal & Academic Information" icon="person">
+          <SectionCard title={detailsTitle} icon="person">
             <div className="px-5 sm:px-6 divide-y divide-slate-100">
               {details.map((row) => (
                 <InfoRow key={row.label} {...row} />
@@ -201,67 +217,5 @@ export default function Profile() {
     getMe().then(setUser).catch((loadError) => setError(loadError?.message || 'Failed to load profile.'));
   }, []);
 
-  const isStudent = role === 'student';
-  if (isStudent) return <StudentProfileView user={user} error={error} />;
-
-  const rows = [
-    { icon: 'badge', label: 'Role', value: ROLE_NAMES[role] || toTitleCase(role) },
-    { icon: 'mail', label: 'Email', value: user?.email },
-    ...(isStudent
-      ? [
-          { icon: 'tag', label: 'Enrollment number', value: user?.enrollment_no },
-          { icon: 'school', label: 'Program', value: user?.program ? String(user.program).toUpperCase() : null },
-          { icon: 'calendar_month', label: 'Year of study', value: user?.year ? `Year ${user.year}` : null },
-          { icon: 'apartment', label: 'Hostel & room', value: [user?.hostel, user?.room].filter(Boolean).join(' · ') },
-          { icon: 'family_restroom', label: 'Parent email', value: user?.parent_email },
-        ]
-      : [
-          ...(user?.hostel ? [{ icon: 'apartment', label: 'Hostel', value: user.hostel }] : []),
-        ]),
-  ];
-
-  return (
-    <DACLayout>
-      <div className="max-w-4xl mx-auto space-y-6">
-        <PageHeader
-          title="Profile"
-          subtitle="Your account details."
-          action={
-            <Link
-              to="/settings"
-              className="inline-flex items-center gap-1.5 h-10 px-4 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-sm font-medium text-slate-700"
-            >
-              <Icon name="lock" className="text-[18px]" />
-              Change password
-            </Link>
-          }
-        />
-        {error && <p className="text-sm text-rose-700 bg-rose-50 border border-rose-100 rounded-xl px-4 py-3">{error}</p>}
-
-        <Card className="px-6 py-6">
-          <div className="flex flex-wrap items-center gap-4">
-            <Avatar name={user?.name || ''} seed={user?.id || 0} square size="h-14 w-14" />
-            <div className="min-w-0 flex-1">
-              <p className="text-lg font-semibold text-slate-900">{user?.name}</p>
-              <p className="text-sm text-slate-500">{ROLE_NAMES[role]}</p>
-            </div>
-            {isStudent && (
-              <div className="rounded-xl bg-[#f8e7ea] border border-[#efd2d8] px-5 py-3 text-right">
-                <p className="text-xs font-medium text-[#9f1d35]">Penalty points</p>
-                <p className="text-2xl font-semibold text-slate-900 tabular-nums">{fmtNumber(user?.total_points)}</p>
-              </div>
-            )}
-          </div>
-        </Card>
-
-        <Card title="Details" icon="person">
-          <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 divide-slate-100 border-t border-slate-100">
-            {rows.map((row) => (
-              <Row key={row.label} {...row} />
-            ))}
-          </div>
-        </Card>
-      </div>
-    </DACLayout>
-  );
+  return <ProfileView user={user} role={role} error={error} />;
 }
