@@ -9,7 +9,11 @@ import {
 } from '../../services/api';
 import EmptyState from '../../components/ui/EmptyState';
 
+// Roles offered when creating a user (account creation is unchanged).
 const ROLE_OPTIONS = ['warden', 'chief_warden', 'dsw', 'admin', 'student'];
+// Roles an existing member can be changed to. The backend enforces the same list.
+const ROLE_CHANGE_OPTIONS = ['warden', 'chief_warden', 'dsw', 'admin'];
+const formatRole = (r) => r.replace('_', ' ').toUpperCase();
 
 const ROLE_BADGE_MAP = {
   admin: 'bg-purple-50 text-purple-700 border-purple-200',
@@ -373,16 +377,18 @@ export default function UserManagement() {
                         </td>
                         <td className="px-6 py-4 text-right">
                           <div className="flex items-center justify-end gap-2">
-                            <select
-                              value={user.role}
-                              disabled={updatingRoleId === user.id}
-                              onChange={(e) => handleRoleChange(user.id, e.target.value)}
-                              className="bg-[#f8fafc] border border-[#edf2f7] rounded-xl px-2.5 py-1.5 text-xs font-semibold text-[#334155] focus:outline-none focus:border-[#3d3793] cursor-pointer"
-                            >
-                              {ROLE_OPTIONS.map((r) => (
-                                <option key={r} value={r}>{r.replace('_', ' ').toUpperCase()}</option>
-                              ))}
-                            </select>
+                            {ROLE_CHANGE_OPTIONS.includes(user.role) && (
+                              <select
+                                value={user.role}
+                                disabled={updatingRoleId === user.id}
+                                onChange={(e) => handleRoleChange(user.id, e.target.value)}
+                                className="bg-[#f8fafc] border border-[#edf2f7] rounded-xl px-2.5 py-1.5 text-xs font-semibold text-[#334155] focus:outline-none focus:border-[#3d3793] cursor-pointer"
+                              >
+                                {ROLE_CHANGE_OPTIONS.map((r) => (
+                                  <option key={r} value={r}>{formatRole(r)}</option>
+                                ))}
+                              </select>
+                            )}
 
                             <button
                               type="button"
@@ -494,15 +500,22 @@ export default function UserManagement() {
                 </div>
                 <div>
                   <label className="text-[#334155] text-xs font-bold uppercase tracking-wider block mb-1">Role *</label>
-                  <select
-                    value={form.role}
-                    onChange={(e) => setForm((prev) => ({ ...prev, role: e.target.value }))}
-                    className="w-full bg-[#f8fafc] border border-[#e2e8f0] rounded-xl px-3.5 py-2.5 text-sm text-[#0f172a] focus:outline-none focus:border-[#3d3793] focus:ring-2 focus:ring-[#3d3793]/20 cursor-pointer"
-                  >
-                    {ROLE_OPTIONS.map((r) => (
-                      <option key={r} value={r}>{r.replace('_', ' ').toUpperCase()}</option>
-                    ))}
-                  </select>
+                  {userModal.mode === 'edit' && !ROLE_CHANGE_OPTIONS.includes(form.role) ? (
+                    // A non-staff account (e.g. a student) keeps its role; it is not changeable here.
+                    <div className="w-full bg-[#f8fafc] border border-[#e2e8f0] rounded-xl px-3.5 py-2.5 text-sm text-[#64748b]">
+                      {formatRole(form.role)}
+                    </div>
+                  ) : (
+                    <select
+                      value={form.role}
+                      onChange={(e) => setForm((prev) => ({ ...prev, role: e.target.value }))}
+                      className="w-full bg-[#f8fafc] border border-[#e2e8f0] rounded-xl px-3.5 py-2.5 text-sm text-[#0f172a] focus:outline-none focus:border-[#3d3793] focus:ring-2 focus:ring-[#3d3793]/20 cursor-pointer"
+                    >
+                      {(userModal.mode === 'create' ? ROLE_OPTIONS : ROLE_CHANGE_OPTIONS).map((r) => (
+                        <option key={r} value={r}>{formatRole(r)}</option>
+                      ))}
+                    </select>
+                  )}
                 </div>
                 <div>
                   <label className="text-[#334155] text-xs font-bold uppercase tracking-wider block mb-1">Hostel Block</label>

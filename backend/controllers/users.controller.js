@@ -10,6 +10,10 @@ import {
 } from '../services/users.service.js';
 
 const ALLOWED_ROLES = new Set(['student', 'warden', 'chief_warden', 'dsw', 'admin']);
+// Roles an existing member may be changed to. 'student' is excluded: student
+// accounts are created as students, never produced by converting a member's role.
+const ROLE_CHANGE_TARGETS = new Set(['warden', 'chief_warden', 'dsw', 'admin']);
+const ROLE_CHANGE_ERROR = 'Role can only be changed to warden, chief_warden, dsw or admin';
 
 function generateTempPassword() {
   const random = Math.floor(1000 + Math.random() * 9000);
@@ -121,6 +125,17 @@ export async function updateUserController(req, res) {
       if (!ALLOWED_ROLES.has(nextRole)) {
         return res.status(400).json({ error: 'A valid role is required' });
       }
+      // 'student' is accepted only when it is unchanged (editing an existing student's
+      // details); it can never be assigned to a member through an edit.
+      if (!ROLE_CHANGE_TARGETS.has(nextRole)) {
+        const existingUser = await getUserByIdService(userId);
+        if (!existingUser) {
+          return res.status(404).json({ error: 'User not found' });
+        }
+        if (existingUser.role !== nextRole) {
+          return res.status(400).json({ error: ROLE_CHANGE_ERROR });
+        }
+      }
     }
 
     const updatedUser = await updateUserService(userId, req.body || {});
@@ -164,6 +179,9 @@ export async function updateUserRoleController(req, res) {
 
     if (!userId || !ALLOWED_ROLES.has(nextRole)) {
       return res.status(400).json({ error: 'A valid user id and role are required' });
+    }
+    if (!ROLE_CHANGE_TARGETS.has(nextRole)) {
+      return res.status(400).json({ error: ROLE_CHANGE_ERROR });
     }
 
     const updatedUser = await updateUserRoleService(userId, nextRole);
