@@ -63,7 +63,53 @@ export default function CasesTable({
         )
       }
     >
-      <div className="overflow-x-auto px-6">
+      {/* Phones: one tappable card per case instead of a wide table. */}
+      <ul className="sm:hidden divide-y divide-slate-100 px-4">
+        {loading &&
+          Array.from({ length: pageSize }, (_, i) => (
+            <li key={i} className="py-4">
+              <div className="h-4 w-2/3 rounded bg-slate-100 animate-pulse" />
+              <div className="mt-2 h-3 w-1/2 rounded bg-slate-100 animate-pulse" />
+            </li>
+          ))}
+        {!loading && rows.length === 0 && (
+          <li>
+            <EmptyState>No cases in this view.</EmptyState>
+          </li>
+        )}
+        {!loading &&
+          rows.map((c) => (
+            <li
+              key={c.id}
+              onClick={() => navigate(caseLink(role, c.id))}
+              className="py-3.5 cursor-pointer active:bg-slate-50"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-medium text-slate-900 truncate">{c.offense}</p>
+                  <p className="mt-0.5 text-xs text-slate-500 truncate">
+                    {c.caseId} · {formatDate(c.date)}
+                  </p>
+                </div>
+                <SeverityPill severity={c.severity} />
+              </div>
+              {showStudent && (
+                <div className="mt-2 flex items-center gap-2 min-w-0">
+                  <Avatar name={c.student} seed={c.id} />
+                  <div className="min-w-0">
+                    <p className="text-sm text-slate-800 truncate">{c.student}</p>
+                    <p className="text-xs text-slate-500 truncate">{c.enrollment}</p>
+                  </div>
+                </div>
+              )}
+              <div className="mt-2 text-sm">
+                <StatusText status={c.status} />
+              </div>
+            </li>
+          ))}
+      </ul>
+
+      <div className="hidden sm:block overflow-x-auto px-6">
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-xs text-slate-500 bg-[#f6f6fa]">
@@ -125,7 +171,7 @@ export default function CasesTable({
         </table>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 text-sm text-slate-500">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 sm:px-6 py-4 text-sm text-slate-500">
         <span className="tabular-nums">
           Showing {rangeStart}–{rangeEnd} of {fmtNumber(count)} cases
         </span>

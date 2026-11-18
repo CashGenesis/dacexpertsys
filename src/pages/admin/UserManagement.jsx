@@ -454,7 +454,7 @@ export default function UserManagement() {
       {/* Modal: Create or Edit User */}
       {userModal.open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs px-4">
-          <div className="w-full max-w-xl rounded-2xl bg-white border border-[#edf2f7] p-6 shadow-2xl space-y-5">
+          <div className="w-full max-w-xl max-h-[90dvh] overflow-y-auto rounded-2xl bg-white border border-[#edf2f7] p-5 sm:p-6 shadow-2xl space-y-5">
             <div className="flex items-center justify-between pb-3 border-b border-[#edf2f7]">
               <h4 className="text-[#0f172a] text-base font-bold">
                 {userModal.mode === 'create' ? 'Create New Faculty/Admin User' : 'Edit User Profile'}
@@ -540,7 +540,7 @@ export default function UserManagement() {
       {/* Modal: Temp Password Display */}
       {tempPasswordModal.open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs px-4">
-          <div className="w-full max-w-md rounded-2xl bg-white border border-[#edf2f7] p-6 shadow-2xl space-y-4">
+          <div className="w-full max-w-md max-h-[90dvh] overflow-y-auto rounded-2xl bg-white border border-[#edf2f7] p-5 sm:p-6 shadow-2xl space-y-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
                 <span className="material-symbols-outlined text-[20px]">lock</span>
@@ -578,7 +578,7 @@ export default function UserManagement() {
       {/* Modal: Delete Confirmation */}
       {deleteTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs px-4">
-          <div className="w-full max-w-md rounded-2xl bg-white border border-[#edf2f7] p-6 shadow-2xl space-y-4">
+          <div className="w-full max-w-md max-h-[90dvh] overflow-y-auto rounded-2xl bg-white border border-[#edf2f7] p-5 sm:p-6 shadow-2xl space-y-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-red-50 text-red-600 flex items-center justify-center">
                 <span className="material-symbols-outlined text-[20px]">warning</span>

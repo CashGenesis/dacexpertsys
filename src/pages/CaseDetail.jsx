@@ -42,7 +42,8 @@ function Field({ label, children }) {
 function Stepper({ status }) {
   const current = status === 'resolved' ? STEPS.length : STEPS.findIndex((s) => s.key === status);
   return (
-    <ol className="grid grid-cols-5 gap-2">
+    <div className="-mx-1 overflow-x-auto pb-1">
+    <ol className="grid grid-cols-5 gap-2 min-w-[520px] px-1">
       {STEPS.map((step, i) => {
         const done = i < current;
         const active = i === current;
@@ -65,6 +66,7 @@ function Stepper({ status }) {
         );
       })}
     </ol>
+    </div>
   );
 }
 

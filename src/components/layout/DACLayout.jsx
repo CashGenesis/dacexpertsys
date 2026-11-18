@@ -82,7 +82,7 @@ function Sidebar({ role, onNavigate }) {
   };
 
   return (
-    <aside className="h-full w-60 bg-[#231f52] text-white flex flex-col">
+    <aside className="h-full w-[min(15rem,85vw)] bg-[#231f52] text-white flex flex-col">
       <div className="flex items-center gap-3 px-5 h-[72px]">
         <span className="material-symbols-outlined text-[30px] text-indigo-200">verified_user</span>
         <div className="leading-tight">
@@ -220,7 +220,7 @@ export default function DACLayout({ children, searchValue, onSearchChange, searc
       </div>
 
       {mobileOpen && (
-        <div className="lg:hidden fixed inset-0 z-40 flex">
+        <div className="lg:hidden fixed inset-0 z-40 flex" role="dialog" aria-modal="true">
           <Sidebar role={role} onNavigate={() => setMobileOpen(false)} />
           <button type="button" aria-label="Close menu" className="flex-1 bg-black/30" onClick={() => setMobileOpen(false)} />
         </div>
@@ -228,7 +228,7 @@ export default function DACLayout({ children, searchValue, onSearchChange, searc
 
       <div className="lg:pl-60">
         <header className="sticky top-0 z-20 bg-[#f6f6fa]/90 backdrop-blur border-b border-slate-200/70">
-          <div className="flex items-center gap-3 px-4 sm:px-8 h-[72px]">
+          <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-8 h-16 sm:h-[72px]">
             <button
               type="button"
               onClick={() => setMobileOpen(true)}
@@ -237,7 +237,7 @@ export default function DACLayout({ children, searchValue, onSearchChange, searc
             >
               <span className="material-symbols-outlined text-[20px]">menu</span>
             </button>
-            <div className="flex-1 max-w-3xl">
+            <div className="flex-1 min-w-0 max-w-3xl">
               <SearchBox
                 value={searchValue}
                 onChange={onSearchChange}
@@ -248,14 +248,15 @@ export default function DACLayout({ children, searchValue, onSearchChange, searc
                 inputClassName="py-2.5 bg-white border border-slate-200 rounded-lg text-sm text-slate-800 placeholder:text-slate-400 focus:border-[#3d3793] focus:ring-4 focus:ring-indigo-100"
               />
             </div>
-            <div className="ml-auto flex items-center gap-2 sm:gap-3">
+            <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-3">
               <NotificationBell />
               {isStaff && (
                 <>
                   {registerLink && (
                     <Link
                       to={registerLink}
-                      className="inline-flex items-center gap-1.5 h-10 px-4 rounded-lg bg-[#231f52] hover:bg-[#2f2a6b] text-white text-sm font-medium transition-colors"
+                      aria-label="Register Case"
+                      className="inline-flex shrink-0 items-center justify-center gap-1.5 h-10 w-10 sm:w-auto sm:px-4 rounded-lg bg-[#231f52] hover:bg-[#2f2a6b] text-white text-sm font-medium transition-colors"
                     >
                       <span className="material-symbols-outlined text-[20px]">add</span>
                       <span className="hidden sm:inline">Register Case</span>
@@ -264,7 +265,8 @@ export default function DACLayout({ children, searchValue, onSearchChange, searc
                   <button
                     type="button"
                     onClick={toggleAssistant}
-                    className="inline-flex items-center gap-1.5 h-10 px-4 rounded-lg border border-[#3d3793]/40 bg-white text-[#3d3793] hover:bg-indigo-50 text-sm font-medium transition-colors"
+                    aria-label="Ask AI"
+                    className="inline-flex shrink-0 items-center justify-center gap-1.5 h-10 w-10 sm:w-auto sm:px-4 rounded-lg border border-[#3d3793]/40 bg-white text-[#3d3793] hover:bg-indigo-50 text-sm font-medium transition-colors"
                   >
                     <span className="hidden sm:inline">Ask AI</span>
                     <span className="material-symbols-outlined text-[20px]">auto_awesome</span>
@@ -275,7 +277,7 @@ export default function DACLayout({ children, searchValue, onSearchChange, searc
           </div>
         </header>
 
-        <main className="px-4 sm:px-8 py-6 sm:py-8">{children}</main>
+        <main className="px-3 sm:px-8 py-4 sm:py-8 pb-[max(1rem,env(safe-area-inset-bottom))]">{children}</main>
       </div>
     </div>
   );

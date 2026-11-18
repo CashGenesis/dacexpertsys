@@ -258,7 +258,7 @@ export default function Reports() {
       </div>
 
       {rec?.status === 'loading' && (
-        <div className="bg-white border border-[#e2e8f0] rounded-xl shadow-sm p-8">
+        <div className="bg-white border border-[#e2e8f0] rounded-xl shadow-sm p-5 sm:p-8">
           <div className="flex items-center gap-3 text-[#3d3793]">
             <span className="material-symbols-outlined animate-spin text-[22px]">progress_activity</span>
             <p className="text-sm font-medium">Analysing the case, the student&apos;s history and the DAC policy…</p>
@@ -297,13 +297,13 @@ export default function Reports() {
 
           <div className="bg-white border border-[#e2e8f0] rounded-xl shadow-sm overflow-hidden">
             <div className="h-2 bg-[#3d3793] w-full" />
-            <div className="p-8 flex gap-6">
+            <div className="p-5 sm:p-8 flex flex-col sm:flex-row gap-4 sm:gap-6">
               <div className="w-[59px] h-[60px] rounded-xl bg-[#3d3793] flex items-center justify-center shrink-0">
                 <ScalesIcon />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-widest text-[#94a3b8] mb-2">AI recommendation</p>
-                <h2 className="text-[#0f172a] text-2xl font-bold leading-8 mb-4">
+                <h2 className="text-[#0f172a] text-xl sm:text-2xl font-bold leading-7 sm:leading-8 mb-4 break-words">
                   {r.recommended_action}
                 </h2>
                 <p className="text-[#64748b] text-sm leading-6 mb-5 max-w-[611px]">{r.summary}</p>
@@ -335,7 +335,7 @@ export default function Reports() {
             </div>
           </div>
 
-          <div className="bg-white border border-[#e2e8f0] rounded-xl shadow-sm p-8">
+          <div className="bg-white border border-[#e2e8f0] rounded-xl shadow-sm p-5 sm:p-8">
             <h3 className="text-[#0f172a] text-lg font-bold flex items-center gap-3 mb-6">
               <GridIcon />
               Contributing Factors
@@ -366,7 +366,7 @@ export default function Reports() {
           </div>
 
           {r.policy_references.length > 0 && (
-            <div className="bg-white border border-[#e2e8f0] rounded-xl shadow-sm p-8">
+            <div className="bg-white border border-[#e2e8f0] rounded-xl shadow-sm p-5 sm:p-8">
               <h3 className="text-[#0f172a] text-lg font-bold mb-4">Policy References</h3>
               <ul className="space-y-2">
                 {r.policy_references.map((ref) => (

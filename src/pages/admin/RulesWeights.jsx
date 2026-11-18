@@ -236,14 +236,14 @@ export default function RulesWeights() {
       )}
 
       {/* Stats row */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           {[
             { label: 'Total Rules', value: stats.total, icon: 'rule', color: 'text-[#3d3793]', bg: 'bg-[#eef2fb]' },
             { label: 'Level 4 (Critical)', value: stats.critical, icon: 'crisis_alert', color: 'text-red-600', bg: 'bg-red-50' },
             { label: 'Level 3 (High)', value: stats.high, icon: 'warning', color: 'text-orange-600', bg: 'bg-orange-50' },
             { label: 'Avg Points', value: stats.avgWeight, icon: 'scale', color: 'text-emerald-600', bg: 'bg-emerald-50' },
           ].map(({ label, value, icon, color, bg }) => (
-          <div key={label} className="bg-white rounded-xl border border-[#e2e8f0] p-4 flex items-center gap-4">
+          <div key={label} className="bg-white rounded-xl border border-[#e2e8f0] p-3 sm:p-4 flex items-center gap-3 sm:gap-4 min-w-0">
             <div className={`w-10 h-10 rounded-lg ${bg} flex items-center justify-center shrink-0`}>
               <span className={`material-symbols-outlined text-[20px] ${color}`}>{icon}</span>
             </div>
@@ -345,7 +345,7 @@ export default function RulesWeights() {
 
       {modal.open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-lg rounded-2xl bg-white border border-[#e2e8f0] p-6 space-y-4">
+          <div className="w-full max-w-lg max-h-[90dvh] overflow-y-auto rounded-2xl bg-white border border-[#e2e8f0] p-5 sm:p-6 space-y-4">
             <div>
               <h4 className="text-[#0f172a] text-lg font-bold">
                 {modal.mode === 'create' ? 'Add Rule' : 'Edit Rule'}
@@ -415,7 +415,7 @@ export default function RulesWeights() {
 
       {loadPolicyOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-md rounded-2xl bg-white border border-[#e2e8f0] p-6 space-y-4">
+          <div className="w-full max-w-md max-h-[90dvh] overflow-y-auto rounded-2xl bg-white border border-[#e2e8f0] p-5 sm:p-6 space-y-4">
             <div>
               <h4 className="text-[#0f172a] text-lg font-bold">Load DAC &amp; Unfair Means Policy</h4>
               <p className="text-sm text-[#64748b] mt-1">
@@ -458,7 +458,7 @@ export default function RulesWeights() {
 
       {deleteTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-md rounded-2xl bg-white border border-[#e2e8f0] p-6 space-y-4">
+          <div className="w-full max-w-md max-h-[90dvh] overflow-y-auto rounded-2xl bg-white border border-[#e2e8f0] p-5 sm:p-6 space-y-4">
             <div>
               <h4 className="text-[#0f172a] text-lg font-bold">Delete Rule</h4>
               <p className="text-sm text-[#64748b] mt-1">

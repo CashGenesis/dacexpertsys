@@ -116,14 +116,14 @@ export default function Login() {
   }, [googleClientId, login]);
 
   return (
-    <div className="relative overflow-hidden min-h-screen w-screen bg-[#eef0f8] flex items-center justify-center p-4 sm:p-6 lg:p-10 font-sans antialiased text-slate-800">
+    <div className="relative overflow-hidden min-h-dvh w-full bg-[#eef0f8] flex items-center justify-center p-4 sm:p-6 lg:p-10 font-sans antialiased text-slate-800">
       {/* Drifting circles in the BMU logo colours */}
       <LogoCirclesBackground />
 
       <div className="relative z-10 w-full max-w-5xl rounded-[28px] overflow-hidden grid grid-cols-1 lg:grid-cols-12 lg:min-h-[640px] ring-1 ring-white/70 shadow-[0_40px_90px_-30px_rgba(30,27,75,0.35)]">
 
         {/* ── LEFT PANEL: campus photo with the university identity ── */}
-        <div className="lg:col-span-6 relative overflow-hidden flex flex-col justify-between gap-10 p-8 sm:p-12 min-h-[260px] text-white">
+        <div className="lg:col-span-6 relative overflow-hidden flex flex-col justify-between gap-6 sm:gap-10 p-6 sm:p-12 min-h-[220px] sm:min-h-[260px] text-white">
           <img
             src="/login-campus.jpg"
             alt=""

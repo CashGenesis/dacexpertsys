@@ -180,11 +180,11 @@ export default function DacChatbot() {
   const isConversation = view === 'conversation';
 
   return (
-    <div className="fixed right-6 top-20 z-[60] font-sans">
+    <div className="fixed inset-x-2 top-[4.5rem] sm:inset-x-auto sm:right-6 sm:top-20 z-[60] font-sans">
       {open && (
         <section
           aria-label="DAC Assistant Chat Panel"
-          className="mb-3 flex h-[min(640px,calc(100dvh-5.5rem))] w-[min(440px,calc(100vw-2rem))] flex-col overflow-hidden rounded-[32px] border border-purple-100 bg-white shadow-[0_20px_60px_rgba(92,84,235,0.2)] transition-all"
+          className="mb-3 flex h-[calc(100dvh-5rem)] sm:h-[min(640px,calc(100dvh-5.5rem))] w-full sm:w-[min(440px,calc(100vw-2rem))] flex-col overflow-hidden rounded-3xl sm:rounded-[32px] border border-purple-100 bg-white shadow-[0_20px_60px_rgba(92,84,235,0.2)] transition-all"
         >
           {/* Header */}
           <header className="flex shrink-0 items-center justify-between bg-[#5c54eb] px-5 py-4 text-white shadow-sm">
