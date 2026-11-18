@@ -1,4 +1,7 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+// Dev: Vite (5173) talks to the backend on 5000. Production: the backend serves
+// the built frontend, so API calls go to the same origin.
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ?? (import.meta.env.DEV ? 'http://localhost:5000' : '');
 
 function buildUrl(path) {
   const base = API_BASE_URL.replace(/\/+$/, '');

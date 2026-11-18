@@ -53,6 +53,25 @@ app.options(/.*/, cors(corsOptions));
 app.use(express.json());
 app.use('/uploads', express.static(uploadsDir));
 
+// Serve the built Vite frontend (npm run build -> dist/) from this same
+// service in production. Browser navigations (GET + Accept: text/html) get
+// index.html so client-side routes like /cases/:id survive a page refresh
+// instead of hitting the API routes that share those prefixes.
+const distDir = path.join(__dirname, '..', 'dist');
+const indexHtml = path.join(distDir, 'index.html');
+if (fs.existsSync(indexHtml)) {
+  app.use(express.static(distDir, { index: false }));
+  app.use((req, res, next) => {
+    if (req.method !== 'GET' || req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
+      return next();
+    }
+    if (!req.accepts('html') || req.headers.accept?.startsWith('application/json')) {
+      return next();
+    }
+    return res.sendFile(indexHtml);
+  });
+}
+
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok' });
 }); 
@@ -84,8 +103,8 @@ app.use('/api/translate', verifyToken, translateRoutes);
 async function startServer() {
   try {
     await ensureWorkflowSchema();
-    app.listen(PORT, () => {
-      console.log(`Backend server running on http://localhost:${PORT}`);
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`Backend server listening on 0.0.0.0:${PORT}`);
     });
   } catch (error) {
     console.error('Server startup failed:', error);
